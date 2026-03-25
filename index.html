@@ -3,36 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Site d'Astronomie</title>
+    <meta name="description" content="Explorez l'univers à travers des articles d'astronomie passionnants. Créez, publiez et partagez vos découvertes cosmiques.">
+    <meta name="theme-color" content="#0a0a1a">
+    <title>Cosmos — Articles d'Astronomie</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/main.css">
 </head>
 <body>
-    <div class="space-bg" aria-hidden="true"></div>
+    <!-- Animated starfield background -->
+    <div class="starfield" aria-hidden="true">
+        <div class="stars stars-sm"></div>
+        <div class="stars stars-md"></div>
+        <div class="stars stars-lg"></div>
+    </div>
 
-    <header>
-        <h1>Créer un Article d'Astronomie</h1>
+    <!-- Nebula glow -->
+    <div class="nebula" aria-hidden="true"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-inner">
+            <a href="#" class="nav-brand">
+                <span class="brand-icon">✦</span>
+                <span class="brand-text">Cosmos</span>
+            </a>
+            <div class="nav-links">
+                <a href="#create" class="nav-link">Créer</a>
+                <a href="#articles" class="nav-link">Articles</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero" id="hero">
+        <div class="hero-content">
+            <div class="hero-badge">🔭 Explorez l'infini</div>
+            <h1 class="hero-title">
+                Partagez vos découvertes
+                <span class="hero-gradient">cosmiques</span>
+            </h1>
+            <p class="hero-subtitle">
+                Créez et publiez des articles sur l'astronomie, les étoiles, les galaxies et les mystères de l'univers.
+            </p>
+            <a href="#create" class="hero-cta">
+                <span>Commencer à écrire</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+        </div>
     </header>
+
     <main>
-        <section id="article-form" class="card">
-            <input type="text" id="title" placeholder="Titre de l'article" required>
-            <input type="url" id="main-image" placeholder="URL de l'image principale (ou laissez vide)">
-            <textarea id="content" placeholder="Écrivez votre article ici..." required></textarea>
-            <div class="extras">
-                <input type="url" id="additional-image-1" placeholder="URL de l'image supplémentaire 1">
-                <input type="url" id="additional-image-2" placeholder="URL de l'image supplémentaire 2">
-                <input type="url" id="additional-image-3" placeholder="URL de l'image supplémentaire 3">
+        <!-- Create Article Section -->
+        <section class="section" id="create">
+            <div class="section-header">
+                <span class="section-tag">✍️ Rédaction</span>
+                <h2 class="section-title">Créer un article</h2>
+                <p class="section-desc">Partagez vos connaissances et passions astronomiques avec le monde.</p>
             </div>
-            <div class="form-actions">
-                <button id="publish-button" class="btn primary">Publier</button>
-                <button id="clear-button" class="btn">Effacer</button>
-            </div>
+
+            <form id="article-form" class="glass-card form-card" autocomplete="off">
+                <div class="form-group">
+                    <label for="title" class="form-label">Titre de l'article</label>
+                    <input type="text" id="title" class="form-input" placeholder="Ex: La nébuleuse d'Orion révèle ses secrets..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="content" class="form-label">Contenu</label>
+                    <textarea id="content" class="form-input form-textarea" placeholder="Écrivez votre article ici... Décrivez les merveilles de l'univers, partagez vos observations, explorez les théories cosmiques..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="main-image" class="form-label">
+                        Image principale
+                        <span class="label-hint">URL (optionnel)</span>
+                    </label>
+                    <input type="url" id="main-image" class="form-input" placeholder="https://exemple.com/image-nebuleuse.jpg">
+                    <div id="main-image-preview" class="image-preview hidden"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        Images supplémentaires
+                        <span class="label-hint">jusqu'à 3 URLs</span>
+                    </label>
+                    <div class="extras-grid">
+                        <input type="url" id="additional-image-1" class="form-input" placeholder="URL image 1">
+                        <input type="url" id="additional-image-2" class="form-input" placeholder="URL image 2">
+                        <input type="url" id="additional-image-3" class="form-input" placeholder="URL image 3">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" id="clear-button" class="btn btn-ghost">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        Effacer
+                    </button>
+                    <button type="button" id="publish-button" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                        Publier l'article
+                    </button>
+                </div>
+            </form>
         </section>
 
-        <section id="articles-display">
-            <h2>Articles Publiés</h2>
-            <div id="articles-container"></div>
+        <!-- Articles Section -->
+        <section class="section" id="articles">
+            <div class="section-header">
+                <span class="section-tag">📡 Publications</span>
+                <h2 class="section-title">Articles publiés</h2>
+                <p class="section-desc">Découvrez les dernières publications de la communauté.</p>
+            </div>
+
+            <!-- Loading skeleton -->
+            <div id="articles-loading" class="articles-loading">
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="articles-empty" class="articles-empty hidden">
+                <div class="empty-icon">🌌</div>
+                <h3>Aucun article pour l'instant</h3>
+                <p>Soyez le premier à partager une découverte cosmique !</p>
+                <a href="#create" class="btn btn-primary">Créer un article</a>
+            </div>
+
+            <!-- Articles grid -->
+            <div id="articles-container" class="articles-grid"></div>
         </section>
     </main>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-brand">
+                <span class="brand-icon">✦</span>
+                <span>Cosmos</span>
+            </div>
+            <p class="footer-text">Explorez l'univers, un article à la fois.</p>
+            <p class="footer-copy">© 2026 Cosmos — Fait avec ❤️ pour l'astronomie</p>
+        </div>
+    </footer>
+
     <script type="module" src="./js/main.js"></script>
 </body>
 </html>
