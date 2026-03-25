@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site d'Astronomie</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div class="space-bg" aria-hidden="true"></div>
+
+    <header>
+        <h1>Créer un Article d'Astronomie</h1>
+    </header>
+    <main>
+        <section id="article-form" class="card">
+            <input type="text" id="title" placeholder="Titre de l'article" required>
+            <input type="url" id="main-image" placeholder="URL de l'image principale (ou laissez vide)">
+            <textarea id="content" placeholder="Écrivez votre article ici..." required></textarea>
+            <div class="extras">
+                <input type="url" id="additional-image-1" placeholder="URL de l'image supplémentaire 1">
+                <input type="url" id="additional-image-2" placeholder="URL de l'image supplémentaire 2">
+                <input type="url" id="additional-image-3" placeholder="URL de l'image supplémentaire 3">
+            </div>
+            <div class="form-actions">
+                <button id="publish-button" class="btn primary">Publier</button>
+                <button id="clear-button" class="btn">Effacer</button>
+            </div>
+        </section>
+
+        <section id="articles-display">
+            <h2>Articles Publiés</h2>
+            <div id="articles-container"></div>
+        </section>
+    </main>
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html>

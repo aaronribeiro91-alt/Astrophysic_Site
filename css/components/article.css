@@ -1,0 +1,59 @@
+/* Styles for the article component */
+
+.article {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+    color: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s, opacity 0.3s;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.article.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.article h2 {
+    font-size: 2em;
+    margin-bottom: 10px;
+}
+
+.article img.main-image {
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+
+.article p {
+    font-size: 1.2em;
+    line-height: 1.5;
+}
+
+.article .additional-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.article .additional-images img {
+    width: calc(33.33% - 10px);
+    border-radius: 5px;
+}
+
+.article .delete-button {
+    background-color: #ff4d4d;
+    color: #ffffff;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.article .delete-button:hover {
+    background-color: #ff1a1a;
+}
