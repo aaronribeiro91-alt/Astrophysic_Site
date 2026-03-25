@@ -3,14 +3,14 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, doc, deleteDoc, serverTimestamp } from "firebase/firestore";
 
-// TES clés Firebase (celles de ta capture de tout à l'heure)
+// Load Firebase config from environment variables (Vite)
 const firebaseConfig = {
-  apiKey: "AIzaSyDasIxnc9Eh_qIJILjRBIl5YdUMEEDMXWk",
-  authDomain: "astrophysic-articles.firebaseapp.com",
-  projectId: "astrophysic-articles",
-  storageBucket: "astrophysic-articles.firebasestorage.app",
-  messagingSenderId: "1024642956813",
-  appId: "1:1024642956813:web:644a95393d20504e0e5623"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
