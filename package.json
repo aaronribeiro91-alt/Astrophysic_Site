@@ -1,0 +1,27 @@
+{
+  "name": "astronomy-articles-site",
+  "version": "1.0.0",
+  "description": "This project is a modern and interactive website dedicated to astronomy articles. Users can create and publish articles that include a title, a main illustration image, text content, and up to three additional images. The site is designed with a dark theme inspired by space, featuring animations and a responsive layout.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aaronribeiro91-alt/Astrophysic_Site.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/aaronribeiro91-alt/Astrophysic_Site/issues"
+  },
+  "homepage": "https://github.com/aaronribeiro91-alt/Astrophysic_Site#readme",
+  "devDependencies": {
+    "firebase": "^12.11.0",
+    "vite": "^8.0.2"
+  }
+}

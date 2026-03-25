@@ -15,6 +15,10 @@ node_modules/
 dist/
 build/
 
+# Environment variables (never commit sensitive keys)
+.env.local
+.env.*.local
+
 # Misc
 Thumbs.db
 .vscode/
