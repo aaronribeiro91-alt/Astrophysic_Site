@@ -963,3 +963,55 @@ body {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ---------- Modal Edit Form ---------- */
+.modal-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 10px;
+}
+
+.modal-edit-form .form-group {
+    margin-bottom: 0;
+}
+
+.modal-edit-form .form-input {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.modal-edit-form .form-textarea {
+    min-height: 150px;
+}
+
+.modal-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 640px) {
+    .modal-edit-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.edit-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.btn-edit {
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--accent-purple);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+}
+
+.btn-edit:hover {
+    background: rgba(167, 139, 250, 0.2);
+    border-color: var(--accent-purple);
+}

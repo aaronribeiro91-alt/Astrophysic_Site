@@ -10,6 +10,7 @@ import {
     addDoc,
     doc,
     deleteDoc,
+    updateDoc,
     serverTimestamp,
     query,
     orderBy
@@ -272,7 +273,7 @@ function showArticleModal(cardEl, data) {
         modal.appendChild(gallery);
     }
 
-    // Footer with date + delete
+    // Footer with date + action buttons
     const footer = document.createElement("div");
     footer.className = "modal-footer";
 
@@ -281,12 +282,179 @@ function showArticleModal(cardEl, data) {
     dateEl.textContent = data.date ? formatDate(data.date) : formatDate(new Date());
     footer.appendChild(dateEl);
 
+    const actionsRight = document.createElement("div");
+    actionsRight.className = "modal-actions-right";
+    actionsRight.style.display = "flex";
+    actionsRight.style.gap = "10px";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-edit";
+    editBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Modifier
+    `;
+
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn btn-danger";
     deleteBtn.innerHTML = `
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         Supprimer
     `;
+
+    // Edit Logic
+    editBtn.addEventListener("click", () => {
+        enterEditMode();
+    });
+
+    function enterEditMode() {
+        // Hide view elements
+        h2.style.display = "none";
+        if (modal.querySelector(".modal-image")) modal.querySelector(".modal-image").style.display = "none";
+        text.style.display = "none";
+        if (modal.querySelector(".modal-gallery")) modal.querySelector(".modal-gallery").style.display = "none";
+        footer.style.display = "none";
+
+        // Create Form
+        const editForm = document.createElement("div");
+        editForm.className = "modal-edit-form";
+        editForm.innerHTML = `
+            <div class="form-group">
+                <label class="form-label">Titre de l'article</label>
+                <input type="text" id="edit-title" class="form-input" value="${data.title.replace(/"/g, '&quot;')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Contenu</label>
+                <textarea id="edit-content" class="form-input form-textarea">${data.text}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Image principale (URL)</label>
+                <input type="text" id="edit-image" class="form-input" value="${data.main || ""}">
+            </div>
+            <div class="modal-edit-grid">
+                <div class="form-group">
+                    <label class="form-label">Image 1</label>
+                    <input type="text" id="edit-extra-1" class="form-input" value="${data.extras[0] || ""}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Image 2</label>
+                    <input type="text" id="edit-extra-2" class="form-input" value="${data.extras[1] || ""}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Image 3</label>
+                    <input type="text" id="edit-extra-3" class="form-input" value="${data.extras[2] || ""}">
+                </div>
+            </div>
+            <div class="edit-actions">
+                <button id="edit-cancel" class="btn btn-ghost">Annuler</button>
+                <button id="edit-save" class="btn btn-primary">Enregistrer les modifications</button>
+            </div>
+        `;
+
+        modal.appendChild(editForm);
+
+        // Cancel
+        editForm.querySelector("#edit-cancel").addEventListener("click", () => {
+            editForm.remove();
+            h2.style.display = "";
+            if (modal.querySelector(".modal-image") && data.main) modal.querySelector(".modal-image").style.display = "";
+            text.style.display = "";
+            if (modal.querySelector(".modal-gallery") && data.extras.length > 0) modal.querySelector(".modal-gallery").style.display = "";
+            footer.style.display = "";
+        });
+
+        // Save
+        editForm.querySelector("#edit-save").addEventListener("click", async () => {
+            const newTitle = editForm.querySelector("#edit-title").value.trim();
+            const newText = editForm.querySelector("#edit-content").value.trim();
+            const newMain = editForm.querySelector("#edit-image").value.trim() || null;
+            const newExtras = [
+                editForm.querySelector("#edit-extra-1").value.trim(),
+                editForm.querySelector("#edit-extra-2").value.trim(),
+                editForm.querySelector("#edit-extra-3").value.trim()
+            ].filter(Boolean);
+
+            if (!newTitle) {
+                showToast("Le titre est obligatoire", "error");
+                return;
+            }
+
+            const saveBtn = editForm.querySelector("#edit-save");
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="btn-spinner"></span> Enregistrement...';
+
+            const id = cardEl?.dataset?.id;
+            const localId = cardEl?.dataset?.localId;
+
+            try {
+                if (id) {
+                    await updateDoc(doc(db, "Article", id), {
+                        titre: newTitle,
+                        contenu: newText,
+                        main: newMain,
+                        extras: newExtras
+                    });
+                } else if (localId) {
+                    // Update local storage
+                    const arr = loadLocalArticles();
+                    const idx = arr.findIndex(a => a._localId === localId);
+                    if (idx !== -1) {
+                        arr[idx].titre = newTitle;
+                        arr[idx].contenu = newText;
+                        arr[idx].main = newMain;
+                        arr[idx].extras = newExtras;
+                        saveLocalArticles(arr);
+                    }
+                }
+
+                // Update UI in background
+                data.title = newTitle;
+                data.text = newText;
+                data.main = newMain;
+                data.extras = newExtras;
+
+                // Update Card UI
+                if (cardEl) {
+                    const cardTitle = cardEl.querySelector(".card-title");
+                    if (cardTitle) cardTitle.textContent = newTitle;
+                    const cardExcerpt = cardEl.querySelector(".card-excerpt");
+                    if (cardExcerpt) cardExcerpt.textContent = newText;
+                    
+                    const oldImg = cardEl.querySelector(".card-image");
+                    const wrapper = cardEl.querySelector(".card-image-wrapper");
+                    const placeholder = cardEl.querySelector(".card-placeholder");
+
+                    if (newMain) {
+                        if (oldImg) {
+                            oldImg.src = newMain;
+                        } else {
+                            if (placeholder) placeholder.remove();
+                            const newWrapper = document.createElement("div");
+                            newWrapper.className = "card-image-wrapper";
+                            const img = document.createElement("img");
+                            img.className = "card-image";
+                            img.src = newMain;
+                            newWrapper.appendChild(img);
+                            cardEl.prepend(newWrapper);
+                        }
+                    } else {
+                        if (wrapper) wrapper.remove();
+                        if (!cardEl.querySelector(".card-placeholder")) {
+                            cardEl.innerHTML = `<div class="card-placeholder">🌠</div>` + cardEl.innerHTML;
+                        }
+                    }
+                }
+
+                showToast("Article mis à jour !", "success");
+                closeModal();
+            } catch (err) {
+                console.error("Erreur update", err);
+                showToast("Échec de la mise à jour", "error");
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = "Enregistrer les modifications";
+            }
+        });
+    }
+
     deleteBtn.addEventListener("click", async (ev) => {
         ev.stopPropagation();
         if (!confirm("Supprimer cet article définitivement ?")) return;
@@ -322,7 +490,9 @@ function showArticleModal(cardEl, data) {
         showToast("Article supprimé", "success");
     });
 
-    footer.appendChild(deleteBtn);
+    actionsRight.appendChild(editBtn);
+    actionsRight.appendChild(deleteBtn);
+    footer.appendChild(actionsRight);
     modal.appendChild(footer);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
