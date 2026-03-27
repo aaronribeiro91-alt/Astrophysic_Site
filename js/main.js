@@ -13,6 +13,7 @@ import {
     updateDoc,
     serverTimestamp,
     query,
+    where,
     orderBy
 } from "firebase/firestore";
 
@@ -28,6 +29,169 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+// ---------- Translations ----------
+const TRANSLATIONS = {
+    fr: {
+        navCreate: "Créer",
+        navArticles: "Articles",
+        heroBadge: "🔭 Explorez l'infini",
+        heroTitle1: "Partagez vos découvertes",
+        heroTitle2: "cosmiques",
+        heroSubtitle: "Créez et publiez des articles sur l'astronomie, les étoiles, les galaxies et les mystères de l'univers.",
+        heroCta: "Commencer à écrire",
+        sectionCreateTag: "✍️ Rédaction",
+        sectionCreateTitle: "Créer un article",
+        sectionCreateDesc: "Partagez vos connaissances et passions astronomiques avec le monde.",
+        labelTitle: "Titre de l'article",
+        labelContent: "Contenu",
+        labelMainImage: "Image principale",
+        labelExtras: "Images supplémentaires",
+        placeholderTitle: "Ex: La nébuleuse d'Orion révèle ses secrets...",
+        placeholderContent: "Écrivez votre article ici...",
+        btnEffacer: "Effacer",
+        btnPublier: "Publier l'article",
+        sectionArticlesTag: "📡 Publications",
+        sectionArticlesTitle: "Articles publiés",
+        sectionArticlesDesc: "Découvrez les dernières publications de la communauté.",
+        emptyTitle: "Aucun article pour l'instant",
+        emptyDesc: "Soyez le premier à partager une découverte cosmique !",
+        emptyCta: "Créer un article",
+        footerTagline: "Explorez l'univers, un article à la fois.",
+        toastPublie: "Article publié avec succès !",
+        toastSupprime: "Article supprimé",
+        toastMisAJour: "Article mis à jour !",
+        toastEfface: "Formulaire effacé",
+        adminTitle: "Panel Administration",
+        adminClose: "Fermer",
+        adminArticles: "Articles",
+        btnModifier: "Modifier",
+        btnSupprimer: "Supprimer",
+        confirmDelete: "Supprimer cet article définitivement ?",
+        confirmClear: "Effacer tous les champs ?",
+        settingsTitle: "Paramètres",
+        settingsLang: "Langue du site",
+        langFR: "Français",
+        langEN: "English"
+    },
+    en: {
+        navCreate: "Create",
+        navArticles: "Articles",
+        heroBadge: "🔭 Explore the infinity",
+        heroTitle1: "Share your cosmic",
+        heroTitle2: "discoveries",
+        heroSubtitle: "Create and publish articles about astronomy, stars, galaxies, and the mysteries of the universe.",
+        heroCta: "Start writing",
+        sectionCreateTag: "✍️ Writing",
+        sectionCreateTitle: "Create an article",
+        sectionCreateDesc: "Share your astronomical knowledge and passions with the world.",
+        labelTitle: "Article Title",
+        labelContent: "Content",
+        labelMainImage: "Main Image",
+        labelExtras: "Additional Images",
+        placeholderTitle: "Ex: The Orion Nebula reveals its secrets...",
+        placeholderContent: "Write your article here...",
+        btnEffacer: "Clear",
+        btnPublier: "Publish article",
+        sectionArticlesTag: "📡 Publications",
+        sectionArticlesTitle: "Published articles",
+        sectionArticlesDesc: "Discover the latest publications from the community.",
+        emptyTitle: "No articles yet",
+        emptyDesc: "Be the first to share a cosmic discovery!",
+        emptyCta: "Create an article",
+        footerTagline: "Explore the universe, one article at a time.",
+        toastPublie: "Article published successfully!",
+        toastSupprime: "Article deleted",
+        toastMisAJour: "Article updated!",
+        toastEfface: "Form cleared",
+        adminTitle: "Admin Panel",
+        adminClose: "Close",
+        adminArticles: "Articles",
+        btnModifier: "Edit",
+        btnSupprimer: "Delete",
+        confirmDelete: "Delete this article permanently?",
+        confirmClear: "Clear all fields?",
+        settingsTitle: "Settings",
+        settingsLang: "Site Language",
+        langFR: "French",
+        langEN: "English"
+    }
+};
+
+let currentLang = localStorage.getItem("cosmos_lang") || "fr";
+let quill;
+
+function initQuill() {
+    const editor = document.getElementById('editor');
+    if (!editor) return;
+
+    quill = new Quill('#editor', {
+        theme: 'snow',
+        placeholder: TRANSLATIONS[currentLang].placeholderContent,
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'header': [1, 2, 3, false] }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'color': [] }, { 'background': [] }],
+                ['link', 'clean']
+            ]
+        }
+    });
+}
+
+function translateUI() {
+    const t = TRANSLATIONS[currentLang];
+    
+    // Update simple text elements
+    const mappings = {
+        '[href="#create"].nav-link': t.navCreate,
+        '[href="#articles"].nav-link': t.navArticles,
+        '.hero-badge': t.heroBadge,
+        '.hero-subtitle': t.heroSubtitle,
+        '.hero-cta span': t.heroCta,
+        '#create .section-tag': t.sectionCreateTag,
+        '#create .section-title': t.sectionCreateTitle,
+        '#create .section-desc': t.sectionCreateDesc,
+        'label[for="title"]': t.labelTitle,
+        'label[for="content"]': t.labelContent,
+        'label[for="main-image"]': t.labelMainImage,
+        '#create .form-group:nth-child(4) .form-label': t.labelExtras,
+        '#clear-button': `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> ${t.btnEffacer}`,
+        '#publish-button': `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg> ${t.btnPublier}`,
+        '#articles .section-tag': t.sectionArticlesTag,
+        '#articles .section-title': t.sectionArticlesTitle,
+        '#articles .section-desc': t.sectionArticlesDesc,
+        '#articles-empty h3': t.emptyTitle,
+        '#articles-empty p': t.emptyDesc,
+        '#articles-empty .btn': t.emptyCta,
+        '.footer-text': t.footerTagline
+    };
+
+    for (const [selector, text] of Object.entries(mappings)) {
+        const el = document.querySelector(selector);
+        if (el) {
+            if (selector.includes('button') || selector.includes('cta')) el.innerHTML = text;
+            else el.textContent = text;
+        }
+    }
+
+    // Special case for hero title with gradient
+    const heroTitle = document.querySelector('.hero-title');
+    if (heroTitle) {
+        heroTitle.innerHTML = `${t.heroTitle1} <span class="hero-gradient">${t.heroTitle2}</span>`;
+    }
+
+    // Placeholders
+    const titleInp = document.getElementById('title');
+    if (titleInp) titleInp.placeholder = t.placeholderTitle;
+    const contentInp = document.getElementById('content');
+    if (contentInp) contentInp.placeholder = t.placeholderContent;
+
+    // Document title
+    document.title = `Cosmos — ${currentLang === 'fr' ? "Articles d'Astronomie" : "Astronomy Articles"}`;
+    document.documentElement.lang = currentLang;
+}
 
 // ---------- Local Storage Fallback ----------
 const LOCAL_KEY = "cosmos_articles_v2";
@@ -89,12 +253,19 @@ function showToast(message, type = "info", duration = 3500) {
     }, duration);
 }
 
+// ---------- Content Helpers ----------
+function stripHtml(html) {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+}
+
 // ---------- Date Formatting ----------
 function formatDate(date) {
     if (!date) return "";
     const d = date instanceof Date ? date : new Date(date);
     if (isNaN(d.getTime())) return "";
-    return new Intl.DateTimeFormat("fr-FR", {
+    return new Intl.DateTimeFormat(currentLang === "fr" ? "fr-FR" : "en-US", {
         day: "numeric",
         month: "long",
         year: "numeric",
@@ -106,6 +277,8 @@ function formatDate(date) {
 // ---------- Navbar Scroll Effect ----------
 function initNavbar() {
     const navbar = document.getElementById("navbar");
+    const logo = document.querySelector(".nav-brand");
+    const settingsBtn = document.getElementById("settings-btn");
     if (!navbar) return;
 
     const onScroll = () => {
@@ -114,6 +287,33 @@ function initNavbar() {
 
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
+
+    // Admin Panel Trigger
+    let clickCount = 0;
+    let lastClick = 0;
+    if (logo) {
+        logo.addEventListener("click", (e) => {
+            e.preventDefault();
+            const now = Date.now();
+            if (now - lastClick < 500) {
+                clickCount++;
+            } else {
+                clickCount = 1;
+            }
+            lastClick = now;
+
+            if (clickCount >= 10) {
+                clickCount = 0;
+                logo.classList.add("logo-shake");
+                setTimeout(() => logo.classList.remove("logo-shake"), 500);
+                showAdminPanel();
+            }
+        });
+    }
+
+    if (settingsBtn) {
+        settingsBtn.addEventListener("click", showSettingsModal);
+    }
 }
 
 // ---------- Image Preview ----------
@@ -154,6 +354,7 @@ function buildArticleCard(data, firestoreId) {
         main: data.main || null,
         extras: (data.extras || []).slice(0, 3),
         date: data.date || null,
+        lang: data.lang || "fr"
     };
 
     // Image or placeholder
@@ -187,7 +388,8 @@ function buildArticleCard(data, firestoreId) {
 
     const excerpt = document.createElement("p");
     excerpt.className = "card-excerpt";
-    excerpt.textContent = data.text || "";
+    // Strip HTML for the card preview to avoid showing raw tags
+    excerpt.textContent = stripHtml(data.text || "");
     body.appendChild(excerpt);
 
     const meta = document.createElement("div");
@@ -202,6 +404,16 @@ function buildArticleCard(data, firestoreId) {
     tag.className = "card-tag";
     tag.textContent = "Astronomie";
     meta.appendChild(tag);
+
+    // Translation badge if viewing cross-lang
+    if (data.lang && data.lang !== currentLang) {
+        const transBadge = document.createElement("span");
+        transBadge.className = "card-tag";
+        transBadge.style.background = "rgba(108, 138, 255, 0.1)";
+        transBadge.style.color = "var(--accent-blue)";
+        transBadge.textContent = currentLang === 'en' ? "Translated" : "Traduit";
+        meta.appendChild(transBadge);
+    }
 
     body.appendChild(meta);
     card.appendChild(body);
@@ -219,7 +431,7 @@ function buildArticleCard(data, firestoreId) {
 }
 
 // ---------- Modal ----------
-function showArticleModal(cardEl, data) {
+function showArticleModal(cardEl, data, autoEdit = false) {
     // Overlay
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -252,10 +464,10 @@ function showArticleModal(cardEl, data) {
         modal.appendChild(img);
     }
 
-    // Text
-    const text = document.createElement("p");
+    // Text (Render as HTML for rich text support)
+    const text = document.createElement("div");
     text.className = "modal-text";
-    text.textContent = data.text || "";
+    text.innerHTML = data.text || "";
     modal.appendChild(text);
 
     // Gallery
@@ -282,6 +494,21 @@ function showArticleModal(cardEl, data) {
     dateEl.textContent = data.date ? formatDate(data.date) : formatDate(new Date());
     footer.appendChild(dateEl);
 
+    // Google Translate Link if lang mismatch
+    if (data.lang && data.lang !== currentLang) {
+        const transLink = document.createElement("a");
+        transLink.className = "btn btn-ghost btn-sm";
+        transLink.style.marginLeft = "15px";
+        transLink.target = "_blank";
+        const targetUrl = encodeURIComponent(window.location.href);
+        transLink.href = `https://translate.google.com/translate?sl=${data.lang}&tl=${currentLang}&u=${targetUrl}`;
+        transLink.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12M7 2h1"/><path d="M22 22l-5-10-5 10M14 18h6"/></svg>
+            ${currentLang === 'en' ? 'Translate Content' : 'Traduire le contenu'}
+        `;
+        footer.appendChild(transLink);
+    }
+
     const actionsRight = document.createElement("div");
     actionsRight.className = "modal-actions-right";
     actionsRight.style.display = "flex";
@@ -302,6 +529,15 @@ function showArticleModal(cardEl, data) {
     `;
 
     // Edit Logic
+    if (autoEdit) {
+        setTimeout(() => enterEditMode(), 100);
+        
+        // Add actions to footer only in admin mode
+        actionsRight.appendChild(editBtn);
+        actionsRight.appendChild(deleteBtn);
+        footer.appendChild(actionsRight);
+    }
+
     editBtn.addEventListener("click", () => {
         enterEditMode();
     });
@@ -324,7 +560,9 @@ function showArticleModal(cardEl, data) {
             </div>
             <div class="form-group">
                 <label class="form-label">Contenu</label>
-                <textarea id="edit-content" class="form-input form-textarea">${data.text}</textarea>
+                <div id="edit-editor-wrapper" class="editor-wrapper">
+                    <div id="edit-editor" style="height: 250px;"></div>
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Image principale (URL)</label>
@@ -352,6 +590,21 @@ function showArticleModal(cardEl, data) {
 
         modal.appendChild(editForm);
 
+        // Init Quill for edit mode
+        const editQuill = new Quill('#edit-editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    [{ 'header': [1, 2, false] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'color': [] }],
+                    ['link', 'clean']
+                ]
+            }
+        });
+        editQuill.root.innerHTML = data.text;
+
         // Cancel
         editForm.querySelector("#edit-cancel").addEventListener("click", () => {
             editForm.remove();
@@ -365,7 +618,7 @@ function showArticleModal(cardEl, data) {
         // Save
         editForm.querySelector("#edit-save").addEventListener("click", async () => {
             const newTitle = editForm.querySelector("#edit-title").value.trim();
-            const newText = editForm.querySelector("#edit-content").value.trim();
+            const newText = editQuill.root.innerHTML;
             const newMain = editForm.querySelector("#edit-image").value.trim() || null;
             const newExtras = [
                 editForm.querySelector("#edit-extra-1").value.trim(),
@@ -417,7 +670,7 @@ function showArticleModal(cardEl, data) {
                     const cardTitle = cardEl.querySelector(".card-title");
                     if (cardTitle) cardTitle.textContent = newTitle;
                     const cardExcerpt = cardEl.querySelector(".card-excerpt");
-                    if (cardExcerpt) cardExcerpt.textContent = newText;
+                    if (cardExcerpt) cardExcerpt.textContent = stripHtml(newText);
                     
                     const oldImg = cardEl.querySelector(".card-image");
                     const wrapper = cardEl.querySelector(".card-image-wrapper");
@@ -490,9 +743,8 @@ function showArticleModal(cardEl, data) {
         showToast("Article supprimé", "success");
     });
 
-    actionsRight.appendChild(editBtn);
-    actionsRight.appendChild(deleteBtn);
-    footer.appendChild(actionsRight);
+    // Public view: edit/delete are hidden by default (only shown if autoEdit is true above)
+    
     modal.appendChild(footer);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
@@ -516,6 +768,153 @@ function showArticleModal(cardEl, data) {
     });
 }
 
+/**
+ * EXPORTED Logic for Edit Mode (Used by Admin Panel)
+ */
+function openArticleEditor(cardEl, data, modalToClose) {
+    if (modalToClose) modalToClose();
+    showArticleModal(cardEl, data);
+    // This is a bit tricky since showArticleModal doesn't return the modal
+    // I will refactor to have enterEditMode accessible
+}
+
+// ---------- Settings Modal ----------
+function showSettingsModal() {
+    const t = TRANSLATIONS[currentLang];
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "modal-container";
+    modal.style.maxWidth = "400px";
+
+    modal.innerHTML = `
+        <button class="modal-close">✕</button>
+        <h2 class="modal-title">${t.settingsTitle}</h2>
+        <div class="settings-list">
+            <div class="form-group">
+                <label class="form-label">${t.settingsLang}</label>
+                <div class="lang-switch">
+                    <button class="lang-btn ${currentLang === 'fr' ? 'active' : ''}" data-lang="fr">${t.langFR}</button>
+                    <button class="lang-btn ${currentLang === 'en' ? 'active' : ''}" data-lang="en">${t.langEN}</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    modal.querySelector(".modal-close").onclick = () => overlay.remove();
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    modal.querySelectorAll(".lang-btn").forEach(btn => {
+        btn.onclick = () => {
+            const lang = btn.dataset.lang;
+            if (lang === currentLang) return;
+            currentLang = lang;
+            localStorage.setItem("cosmos_lang", lang);
+            translateUI();
+            overlay.remove();
+            loadArticles();
+            showToast(currentLang === 'fr' ? "Langue changée : Français" : "Language changed: English", "info");
+        };
+    });
+}
+
+// ---------- Admin Panel ----------
+async function showAdminPanel() {
+    const t = TRANSLATIONS[currentLang];
+    const overlay = document.createElement("div");
+    overlay.className = "admin-overlay";
+
+    overlay.innerHTML = `
+        <div class="admin-header">
+            <h2 class="admin-title">${t.adminTitle}</h2>
+            <button class="btn btn-ghost" id="admin-close">${t.adminClose}</button>
+        </div>
+        <div class="admin-content">
+            <div class="admin-list" id="admin-article-list">
+                <div class="btn-spinner"></div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    document.getElementById("admin-close").onclick = () => {
+        overlay.remove();
+        document.body.style.overflow = "";
+    };
+
+    const list = document.getElementById("admin-article-list");
+
+    try {
+        const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
+        const snapshot = await getDocs(q);
+        list.innerHTML = "";
+
+        if (snapshot.empty) {
+            list.innerHTML = "Aucun article.";
+            return;
+        }
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const id = docSnap.id;
+            const item = document.createElement("div");
+            item.className = "admin-item";
+            
+            const createdAt = data.createdAt?.toDate?.() || new Date();
+            const lang = data.lang || "fr";
+
+            item.innerHTML = `
+                <div class="admin-item-info">
+                    <div class="admin-item-title">${data.titre || data.title}</div>
+                    <div class="admin-item-meta">${formatDate(createdAt)} | Lang: ${lang.toUpperCase()}</div>
+                </div>
+                <div class="admin-item-actions">
+                    <button class="btn btn-edit btn-sm" data-id="${id}">${t.btnModifier}</button>
+                    <button class="btn btn-danger btn-sm" data-id="${id}">${t.btnSupprimer}</button>
+                </div>
+            `;
+
+            // Delete Logic
+            item.querySelector(".btn-danger").onclick = async () => {
+                try {
+                    await deleteDoc(doc(db, "Article", id));
+                    item.remove();
+                    showToast(t.toastSupprime, "success");
+                    loadArticles(); // Refresh main grid
+                } catch (e) {
+                    showToast("Error", "error");
+                }
+            };
+
+            // Edit Logic - We reuse the existing modal logic by creating a dummy card element
+            item.querySelector(".btn-edit").onclick = () => {
+                const dummyCard = document.createElement("div");
+                dummyCard.dataset.id = id;
+                const articleData = {
+                    title: data.titre || data.title || "",
+                    text: data.contenu || data.content || "",
+                    main: data.main || null,
+                    extras: data.extras || [],
+                    date: createdAt
+                };
+                
+                // We need to slightly refactor showArticleModal to accept an "autoEnterEdit" flag
+                showArticleModal(dummyCard, articleData, true); 
+            };
+
+            list.appendChild(item);
+        });
+    } catch (err) {
+        list.innerHTML = "Erreur de chargement.";
+    }
+}
+
 // ---------- UI State ----------
 function updateEmptyState() {
     const container = document.getElementById("articles-container");
@@ -537,8 +936,8 @@ async function loadArticles() {
 
     container.innerHTML = "";
     if (loading) loading.classList.remove("hidden");
-
     try {
+        // Fetch ALL articles (no where clause to avoid index issues with missing 'lang' field)
         const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
         const snapshot = await getDocs(q);
 
@@ -555,6 +954,7 @@ async function loadArticles() {
                         main: a.main || null,
                         extras: a.extras || [],
                         date: a.createdAt || null,
+                        lang: a.lang || "fr"
                     });
                     if (a._localId) node.dataset.localId = a._localId;
                     container.appendChild(node);
@@ -567,25 +967,34 @@ async function loadArticles() {
         snapshot.forEach((d) => {
             const data = d.data();
             const createdAt = data.createdAt?.toDate?.() || null;
-            const node = buildArticleCard(
-                {
-                    title: data.titre || data.title || "",
-                    text: data.contenu || data.content || "",
-                    main: data.main || null,
-                    extras: data.extras || [],
-                    date: createdAt,
-                },
-                d.id
-            );
-            container.appendChild(node);
+            const articleLang = data.lang || null;
+
+            // Visibility Logic: 
+            // 1. Show if lang matches currentLang
+            // 2. Show if it's a legacy article (no lang field) - as requested by user
+            if (!articleLang || articleLang === currentLang) {
+                const node = buildArticleCard(
+                    {
+                        title: data.titre || data.title || "",
+                        text: data.contenu || data.content || "",
+                        main: data.main || null,
+                        extras: data.extras || [],
+                        date: createdAt,
+                        lang: articleLang || "fr"
+                    },
+                    d.id
+                );
+                container.appendChild(node);
+            }
         });
 
         updateEmptyState();
         console.log("✅ Articles chargés depuis Firebase");
     } catch (err) {
         console.warn("Erreur Firebase, fallback localStorage", err);
+        // ... local storage fallback already handled by snapshot.empty check above if needed, 
+        // but let's keep a catch fallback for total failure.
         if (loading) loading.classList.add("hidden");
-
         const local = loadLocalArticles();
         local.forEach((a) => {
             const node = buildArticleCard({
@@ -594,11 +1003,11 @@ async function loadArticles() {
                 main: a.main || null,
                 extras: a.extras || [],
                 date: a.createdAt || null,
+                lang: a.lang || "fr"
             });
             if (a._localId) node.dataset.localId = a._localId;
             container.appendChild(node);
         });
-
         updateEmptyState();
     }
 }
@@ -611,7 +1020,7 @@ async function publishArticle() {
     const publishBtn = document.getElementById("publish-button");
 
     const title = titleEl?.value.trim() || "";
-    const text = contentEl?.value.trim() || "";
+    const text = quill ? quill.root.innerHTML : "";
     const mainImage = mainImageEl?.value.trim() || null;
 
     if (!title && !text) {
@@ -640,6 +1049,7 @@ async function publishArticle() {
             contenu: text,
             main: mainImage,
             extras: extras,
+            lang: currentLang,
             createdAt: serverTimestamp(),
         });
 
@@ -679,7 +1089,7 @@ async function publishArticle() {
     publishBtn.innerHTML = originalHTML;
 
     if (titleEl) titleEl.value = "";
-    if (contentEl) contentEl.value = "";
+    if (quill) quill.setContents([]);
     if (mainImageEl) mainImageEl.value = "";
     for (let i = 1; i <= 3; i++) {
         const el = document.getElementById(`additional-image-${i}`);
@@ -702,11 +1112,12 @@ async function publishArticle() {
 function clearForm() {
     if (!confirm("Effacer tous les champs ?")) return;
 
-    const fields = ["title", "content", "main-image", "additional-image-1", "additional-image-2", "additional-image-3"];
+    const fields = ["title", "main-image", "additional-image-1", "additional-image-2", "additional-image-3"];
     fields.forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = "";
     });
+    if (quill) quill.setContents([]);
 
     const preview = document.getElementById("main-image-preview");
     if (preview) {
@@ -719,8 +1130,10 @@ function clearForm() {
 
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", async () => {
+    initQuill();
     initNavbar();
     initImagePreview();
+    translateUI();
 
     const publishBtn = document.getElementById("publish-button");
     const clearBtn = document.getElementById("clear-button");
