@@ -12,7 +12,12 @@
     "type": "git",
     "url": "git+https://github.com/aaronribeiro91-alt/Astrophysic_Site.git"
   },
-  "keywords": ["astronomy", "articles", "cosmos", "firebase"],
+  "keywords": [
+    "astronomy",
+    "articles",
+    "cosmos",
+    "firebase"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
@@ -20,7 +25,8 @@
   },
   "homepage": "https://aaronribeiro91-alt.github.io/Astrophysic_Site/",
   "dependencies": {
-    "firebase": "^12.11.0"
+    "firebase": "^12.11.0",
+    "profanities": "^3.0.1"
   },
   "devDependencies": {
     "vite": "^8.0.2"

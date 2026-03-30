@@ -71,36 +71,53 @@
             </div>
 
             <form id="article-form" class="glass-card form-card" autocomplete="off">
+                <!-- Type Toggle -->
                 <div class="form-group">
-                    <label for="title" class="form-label">Titre de l'article</label>
+                    <div class="type-toggle" id="type-toggle">
+                        <button type="button" class="type-toggle-btn active" data-type="article">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            Article
+                        </button>
+                        <button type="button" class="type-toggle-btn" data-type="note">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Note
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="title" class="form-label" id="label-title">Titre de l'article</label>
                     <input type="text" id="title" class="form-input" placeholder="Ex: La nébuleuse d'Orion révèle ses secrets..." required>
                 </div>
 
                 <div class="form-group">
-                    <label for="content" class="form-label">Contenu de l'article</label>
+                    <label for="content" class="form-label" id="label-content">Contenu de l'article</label>
                     <div id="editor-wrapper" class="editor-wrapper">
                         <div id="editor" style="height: 300px;"></div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="main-image" class="form-label">
-                        Image principale
-                        <span class="label-hint">URL (optionnel)</span>
-                    </label>
-                    <input type="url" id="main-image" class="form-input" placeholder="https://exemple.com/image-nebuleuse.jpg">
-                    <div id="main-image-preview" class="image-preview hidden"></div>
-                </div>
+                <!-- Image fields (hidden for Notes) -->
+                <div id="image-fields">
+                    <div class="form-group">
+                        <label for="main-image" class="form-label">
+                            Image principale
+                            <span class="label-hint">URL (optionnel)</span>
+                        </label>
+                        <input type="url" id="main-image" class="form-input" placeholder="https://exemple.com/image-nebuleuse.jpg">
+                        <div id="main-image-preview" class="image-preview hidden"></div>
+                    </div>
 
-                <div class="form-group">
-                    <label class="form-label">
-                        Images supplémentaires
-                        <span class="label-hint">jusqu'à 3 URLs</span>
-                    </label>
-                    <div class="extras-grid">
-                        <input type="url" id="additional-image-1" class="form-input" placeholder="URL image 1">
-                        <input type="url" id="additional-image-2" class="form-input" placeholder="URL image 2">
-                        <input type="url" id="additional-image-3" class="form-input" placeholder="URL image 3">
+                    <div class="form-group">
+                        <label class="form-label">
+                            Images supplémentaires
+                            <span class="label-hint">jusqu'à 3 URLs</span>
+                        </label>
+                        <div class="extras-grid">
+                            <input type="url" id="additional-image-1" class="form-input" placeholder="URL image 1">
+                            <input type="url" id="additional-image-2" class="form-input" placeholder="URL image 2">
+                            <input type="url" id="additional-image-3" class="form-input" placeholder="URL image 3">
+                        </div>
                     </div>
                 </div>
 
@@ -156,7 +173,7 @@
                 <span>Cosmos</span>
             </div>
             <p class="footer-text">Explorez l'univers, un article à la fois.</p>
-            <p class="footer-copy">© 2026 Cosmos — Fait avec ❤️ pour l'astronomie</p>
+            <p class="footer-copy">© 2026 Cosmos — Fait avec ❤️ <span id="ban-list-trigger" style="cursor:pointer; transition: opacity 0.3s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"> - Aaron Ribeiro - </span> pour l'astronomie</p>
         </div>
     </footer>
 

@@ -17,6 +17,19 @@ import {
     orderBy
 } from "firebase/firestore";
 
+import { profanities as profanitiesEN } from "profanities";
+import { profanities as profanitiesFR } from "profanities/fr";
+
+// ---------- Quill Custom Formats ----------
+if (typeof Quill !== 'undefined') {
+    const Inline = Quill.import('blots/inline');
+    class ProfanityBlot extends Inline {}
+    ProfanityBlot.blotName = 'profanity';
+    ProfanityBlot.className = 'ql-profanity';
+    Quill.register(ProfanityBlot);
+}
+
+
 // ---------- Firebase Config ----------
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -119,6 +132,7 @@ const TRANSLATIONS = {
 };
 
 let currentLang = localStorage.getItem("cosmos_lang") || "fr";
+let currentType = "article"; // 'article' or 'note'
 let quill;
 
 function initQuill() {
@@ -138,6 +152,48 @@ function initQuill() {
             ]
         }
     });
+
+    // Live profanity checking
+    quill.on('text-change', (delta, oldDelta, source) => {
+        if (source === 'user') {
+            updateLiveProfanity(quill);
+        }
+    });
+}
+
+let profanityTimeout;
+function updateLiveProfanity(q) {
+    if (!q) return;
+    clearTimeout(profanityTimeout);
+    profanityTimeout = setTimeout(() => {
+        const text = q.getText();
+        const lowerText = text.toLowerCase();
+        
+        q.formatText(0, text.length, 'profanity', false, 'silent');
+
+        let foundCount = 0;
+        for (const word of BANNED_WORDS) {
+            if (WHITELISTED_WORDS.has(word)) continue;
+            
+            let index = lowerText.indexOf(word);
+            while (index !== -1) {
+                const prevChar = index > 0 ? lowerText[index - 1] : ' ';
+                const nextChar = index + word.length < lowerText.length ? lowerText[index + word.length] : ' ';
+                if (/\s|[^\p{L}\p{N}]/u.test(prevChar) && /\s|[^\p{L}\p{N}]/u.test(nextChar)) {
+                    if (prevChar !== '#' || nextChar !== '#') {
+                        q.formatText(index, word.length, 'profanity', true, 'silent');
+                        foundCount++;
+                    }
+                }
+                index = lowerText.indexOf(word, index + 1);
+            }
+        }
+
+        const wrapper = q.root.closest('.editor-wrapper');
+        if (wrapper) {
+            wrapper.classList.toggle('input-profanity', foundCount > 0);
+        }
+    }, 700);
 }
 
 function translateUI() {
@@ -228,7 +284,7 @@ function removeLocalArticleById(id) {
 }
 
 // ---------- Toast Notifications ----------
-function showToast(message, type = "info", duration = 3500) {
+function showToast(message, type = "info", duration = 3500, onClick = null) {
     const container = document.getElementById("toast-container");
     if (!container) return;
 
@@ -239,17 +295,30 @@ function showToast(message, type = "info", duration = 3500) {
     };
 
     const toast = document.createElement("div");
-    toast.className = `toast toast-${type}`;
+    toast.className = `toast toast-${type}` + (onClick ? " clickable" : "");
     toast.innerHTML = `
         <span class="toast-icon">${icons[type] || icons.info}</span>
         <span>${message}</span>
     `;
 
+    if (onClick) {
+        toast.style.cursor = "pointer";
+        toast.onclick = (e) => {
+            e.stopPropagation();
+            onClick();
+            toast.classList.add("toast-out");
+            setTimeout(() => toast.remove(), 300);
+        };
+    }
+
     container.appendChild(toast);
 
     setTimeout(() => {
-        toast.classList.add("toast-out");
-        toast.addEventListener("animationend", () => toast.remove());
+        if (toast.parentNode) {
+            toast.setAttribute('style', 'pointer-events: none;'); // Prevent clicks while fading
+            toast.classList.add("toast-out");
+            toast.addEventListener("animationend", () => toast.remove());
+        }
     }, duration);
 }
 
@@ -258,6 +327,232 @@ function stripHtml(html) {
     const tmp = document.createElement("DIV");
     tmp.innerHTML = html;
     return tmp.textContent || tmp.innerText || "";
+}
+
+// ---------- Profanity Filter ----------
+let BANNED_WORDS = new Set([...profanitiesEN, ...profanitiesFR].map(w => w.toLowerCase()));
+const CUSTOM_BANNED_WORDS_REFS = new Map(); // word -> docId
+const WHITELISTED_WORDS = new Set();
+const WHITELIST_REFS = new Map(); // word -> docId
+
+async function loadCustomBannedWords() {
+    try {
+        const qB = query(collection(db, "BannedWords"));
+        const snapB = await getDocs(qB);
+        snapB.forEach(d => {
+            const word = d.data().word?.toLowerCase();
+            if (word) {
+                BANNED_WORDS.add(word);
+                CUSTOM_BANNED_WORDS_REFS.set(word, d.id);
+            }
+        });
+
+        const qW = query(collection(db, "WhitelistedWords"));
+        const snapW = await getDocs(qW);
+        snapW.forEach(d => {
+            const word = d.data().word?.toLowerCase();
+            if (word) {
+                WHITELISTED_WORDS.add(word);
+                WHITELIST_REFS.set(word, d.id);
+            }
+        });
+        console.log(`✅ Mots bannis (${snapB.size}) et Liste blanche (${snapW.size}) chargés`);
+    } catch (err) {
+        console.error("Erreur chargement mots bannis/blancs:", err);
+    }
+}
+
+async function addCustomBannedWord(word) {
+    const w = word.toLowerCase().trim();
+    if (!w) return;
+    // If it was whitelisted, remove from whitelist first
+    if (WHITELISTED_WORDS.has(w)) await removeFromWhitelist(w);
+    
+    if (BANNED_WORDS.has(w) && CUSTOM_BANNED_WORDS_REFS.has(w)) return;
+
+    try {
+        const docRef = await addDoc(collection(db, "BannedWords"), {
+            word: w,
+            createdAt: serverTimestamp()
+        });
+        BANNED_WORDS.add(w);
+        CUSTOM_BANNED_WORDS_REFS.set(w, docRef.id);
+        return docRef.id;
+    } catch (err) {
+        console.error("Erreur ajout mot banni:", err);
+        throw err;
+    }
+}
+
+async function deleteCustomBannedWord(word) {
+    const w = word.toLowerCase().trim();
+    const id = CUSTOM_BANNED_WORDS_REFS.get(w);
+    if (!id) return;
+    try {
+        await deleteDoc(doc(db, "BannedWords", id));
+        BANNED_WORDS.delete(w);
+        CUSTOM_BANNED_WORDS_REFS.delete(w);
+    } catch (err) {
+        console.error("Erreur suppression mot banni:", err);
+        throw err;
+    }
+}
+
+async function addToWhitelist(word) {
+    const w = word.toLowerCase().trim();
+    if (WHITELISTED_WORDS.has(w)) return;
+    try {
+        const docRef = await addDoc(collection(db, "WhitelistedWords"), {
+            word: w,
+            createdAt: serverTimestamp()
+        });
+        WHITELISTED_WORDS.add(w);
+        WHITELIST_REFS.set(w, docRef.id);
+    } catch (err) {
+        console.error("Erreur ajout liste blanche:", err);
+        throw err;
+    }
+}
+
+async function removeFromWhitelist(word) {
+    const w = word.toLowerCase().trim();
+    const id = WHITELIST_REFS.get(w);
+    if (!id) return;
+    try {
+        await deleteDoc(doc(db, "WhitelistedWords", id));
+        WHITELISTED_WORDS.delete(w);
+        WHITELIST_REFS.delete(w);
+    } catch (err) {
+        console.error("Erreur suppression liste blanche:", err);
+        throw err;
+    }
+}
+
+function containsProfanity(text) {
+    const lowerText = text.toLowerCase();
+    
+    for (const word of BANNED_WORDS) {
+        if (WHITELISTED_WORDS.has(word)) continue; // Bypass if whitelisted
+        
+        let index = lowerText.indexOf(word);
+        while (index !== -1) {
+            // Check if it's a whole word match (boundary check)
+            const prevChar = index > 0 ? lowerText[index - 1] : ' ';
+            const nextChar = index + word.length < lowerText.length ? lowerText[index + word.length] : ' ';
+            
+            // Boundary = whitespace or punctuation
+            const isAtStart = /\s|[^\p{L}\p{N}]/u.test(prevChar);
+            const isAtEnd = /\s|[^\p{L}\p{N}]/u.test(nextChar);
+            
+            if (isAtStart && isAtEnd) {
+                // If wrapped in # (e.g. #word#), we allow it
+                if (prevChar === '#' && nextChar === '#') {
+                    // Bypass - continue searching for other occurrences
+                } else {
+                    return word; // Direct hit, not allowed
+                }
+            }
+            
+            index = lowerText.indexOf(word, index + 1);
+        }
+    }
+    return null;
+}
+
+function stripProfanityHashes(text) {
+    let cleaned = text;
+    for (const word of BANNED_WORDS) {
+        if (WHITELISTED_WORDS.has(word)) continue;
+        
+        const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`#(${escaped})#`, 'gi');
+        cleaned = cleaned.replace(regex, '$1');
+    }
+    return cleaned;
+}
+
+function highlightProfanityInQuill(q, word) {
+    if (!q) return;
+    const text = q.getText();
+    const lowerText = text.toLowerCase();
+    const lowerWord = word.toLowerCase();
+    let index = lowerText.indexOf(lowerWord);
+    let found = false;
+    
+    while (index !== -1) {
+        // Boundary check for Quill text
+        const prevChar = index > 0 ? lowerText[index - 1] : ' ';
+        const nextChar = index + word.length < lowerText.length ? lowerText[index + word.length] : ' ';
+        const isAtStart = /\s|[^\p{L}\p{N}]/u.test(prevChar);
+        const isAtEnd = /\s|[^\p{L}\p{N}]/u.test(nextChar);
+
+        if (isAtStart && isAtEnd) {
+            q.formatText(index, word.length, { 'background': 'rgba(255, 77, 77, 0.3)', 'color': '#ff4d4d' }, 'user');
+            found = true;
+            
+            const currentIndex = index;
+            setTimeout(() => {
+                const formats = q.getFormat(currentIndex, word.length);
+                if (formats.background === 'rgba(255, 77, 77, 0.3)') {
+                    q.removeFormat(currentIndex, word.length, 'user');
+                }
+            }, 5000);
+        }
+        index = lowerText.indexOf(lowerWord, index + 1);
+    }
+    
+    if (found) {
+        const firstIndex = lowerText.indexOf(lowerWord);
+        q.setSelection(firstIndex, word.length);
+        q.root.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const wrapper = q.root.closest('.editor-wrapper');
+        if (wrapper) {
+            wrapper.classList.add('input-profanity');
+            setTimeout(() => {
+                // We don't remove it here because updateLiveProfanity will handle it 
+                // but let's clear it if the text actually changed or after a while
+            }, 5000);
+        }
+    }
+}
+
+function highlightProfanityInInput(input, word) {
+    if (!input) return;
+    input.focus();
+    input.classList.add('profanity-highlight-error');
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    setTimeout(() => {
+        input.classList.remove('profanity-highlight-error');
+    }, 5000);
+}
+
+function showBanList() {
+    const overlay = document.createElement("div");
+    overlay.className = "admin-overlay";
+    
+    const sortedWords = Array.from(BANNED_WORDS).sort();
+    
+    overlay.innerHTML = `
+        <div class="admin-header">
+            <h2 class="admin-title">Banned Words (${sortedWords.length})</h2>
+            <button class="btn btn-ghost" id="ban-list-close">${TRANSLATIONS[currentLang].adminClose}</button>
+        </div>
+        <div class="admin-content" style="max-height: 70vh; overflow-y: auto; padding-bottom: 40px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; padding: 20px;">
+                ${sortedWords.map(word => `<span style="background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; cursor: default;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">${word}</span>`).join('')}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    document.getElementById("ban-list-close").onclick = () => {
+        overlay.remove();
+        document.body.style.overflow = "";
+    };
 }
 
 // ---------- Date Formatting ----------
@@ -341,6 +636,58 @@ function initImagePreview() {
     });
 }
 
+// ---------- Type Toggle ----------
+function initTypeToggle() {
+    const toggle = document.getElementById('type-toggle');
+    if (!toggle) return;
+
+    const btns = toggle.querySelectorAll('.type-toggle-btn');
+    const imageFields = document.getElementById('image-fields');
+    const labelTitle = document.getElementById('label-title');
+    const labelContent = document.getElementById('label-content');
+    const publishBtn = document.getElementById('publish-button');
+    const titleInput = document.getElementById('title');
+
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            btns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentType = btn.dataset.type;
+
+            // Add animation to the form
+            const form = document.getElementById('article-form');
+            if (form) {
+                form.classList.remove('form-switch-anim');
+                void form.offsetWidth; // Force reflow
+                form.classList.add('form-switch-anim');
+            }
+
+            const t = TRANSLATIONS[currentLang];
+            if (currentType === 'note') {
+                imageFields?.classList.add('hidden');
+                if (labelTitle) labelTitle.textContent = currentLang === 'fr' ? 'Titre de la note' : 'Note Title';
+                if (labelContent) labelContent.textContent = currentLang === 'fr' ? 'Contenu de la note' : 'Note Content';
+                if (publishBtn) publishBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    ${currentLang === 'fr' ? 'Publier la note' : 'Publish note'}
+                `;
+                if (titleInput) titleInput.placeholder = currentLang === 'fr' ? 'Ex: Rappel - Observer la pluie de météores...' : 'Ex: Reminder - Watch the meteor shower...';
+                if (quill) quill.root.dataset.placeholder = currentLang === 'fr' ? 'Écrivez vos notes ici...' : 'Write your notes here...';
+            } else {
+                imageFields?.classList.remove('hidden');
+                if (labelTitle) labelTitle.textContent = t.labelTitle;
+                if (labelContent) labelContent.textContent = t.labelContent;
+                if (publishBtn) publishBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    ${t.btnPublier}
+                `;
+                if (titleInput) titleInput.placeholder = t.placeholderTitle;
+                if (quill) quill.root.dataset.placeholder = t.placeholderContent;
+            }
+        });
+    });
+}
+
 // ---------- Article Card Builder ----------
 function buildArticleCard(data, firestoreId) {
     const card = document.createElement("article");
@@ -354,8 +701,12 @@ function buildArticleCard(data, firestoreId) {
         main: data.main || null,
         extras: (data.extras || []).slice(0, 3),
         date: data.date || null,
-        lang: data.lang || "fr"
+        lang: data.lang || "fr",
+        type: data.type || "article"
     };
+
+    const isNote = (data.type === 'note');
+    if (isNote) card.classList.add('note-card');
 
     // Image or placeholder
     if (data.main) {
@@ -372,7 +723,9 @@ function buildArticleCard(data, firestoreId) {
         wrapper.appendChild(img);
         card.appendChild(wrapper);
     } else {
-        const emojis = ["🪐", "🌌", "⭐", "🔭", "🚀", "☄️", "🌙", "💫"];
+        const emojis = isNote 
+            ? ["📝", "✏️", "📌", "💡", "🗒️"] 
+            : ["🪐", "🌌", "⭐", "🔭", "🚀", "☄️", "🌙", "💫"];
         const emoji = emojis[Math.floor(Math.random() * emojis.length)];
         card.innerHTML += `<div class="card-placeholder">${emoji}</div>`;
     }
@@ -402,7 +755,7 @@ function buildArticleCard(data, firestoreId) {
 
     const tag = document.createElement("span");
     tag.className = "card-tag";
-    tag.textContent = "Astronomie";
+    tag.textContent = isNote ? "Note" : "Astronomie";
     meta.appendChild(tag);
 
     // Translation badge if viewing cross-lang
@@ -605,6 +958,22 @@ function showArticleModal(cardEl, data, autoEdit = false) {
         });
         editQuill.root.innerHTML = data.text;
 
+        // Live profanity checking for edit mode
+        editQuill.on('text-change', (delta, oldDelta, source) => {
+            if (source === 'user') updateLiveProfanity(editQuill);
+        });
+        const editTitleEl = editForm.querySelector("#edit-title");
+        if (editTitleEl) {
+            editTitleEl.addEventListener('input', () => {
+                const hasProfanity = containsProfanity(editTitleEl.value);
+                editTitleEl.classList.toggle('input-profanity', !!hasProfanity);
+            });
+            // Initial check
+            if (containsProfanity(editTitleEl.value)) editTitleEl.classList.add('input-profanity');
+        }
+        // Initial check for quill
+        setTimeout(() => updateLiveProfanity(editQuill), 100);
+
         // Cancel
         editForm.querySelector("#edit-cancel").addEventListener("click", () => {
             editForm.remove();
@@ -617,8 +986,47 @@ function showArticleModal(cardEl, data, autoEdit = false) {
 
         // Save
         editForm.querySelector("#edit-save").addEventListener("click", async () => {
-            const newTitle = editForm.querySelector("#edit-title").value.trim();
+            const editTitleEl = editForm.querySelector("#edit-title");
+            const newTitle = editTitleEl.value.trim();
             const newText = editQuill.root.innerHTML;
+
+            if (!newTitle) {
+                showToast(currentLang === 'fr' ? "Veuillez ajouter un titre." : "Please add a title.", "error");
+                return;
+            }
+            const plainText = stripHtml(newText).trim();
+            if (!plainText) {
+                showToast(currentLang === 'fr' ? "Veuillez ajouter du contenu." : "Please add some content.", "error");
+                return;
+            }
+
+            // Profanity check - Title
+            const titleBadWord = containsProfanity(newTitle);
+            if (titleBadWord) {
+                showToast(
+                    currentLang === 'fr' ? `Gros mot détecté dans le titre. Cliquez pour voir.` : `Profanity detected in title. Click to see.`,
+                    "error",
+                    5000,
+                    () => highlightProfanityInInput(editTitleEl, titleBadWord)
+                );
+                return;
+            }
+
+            // Profanity check - Content
+            const contentBadWord = containsProfanity(plainText);
+            if (contentBadWord) {
+                showToast(
+                    currentLang === 'fr' ? `Gros mot détecté dans le contenu. Cliquez pour voir.` : `Profanity detected in content. Click to see.`,
+                    "error",
+                    5000,
+                    () => highlightProfanityInQuill(editQuill, contentBadWord)
+                );
+                return;
+            }
+
+            // Clean hashes before saving
+            const finalTitle = stripProfanityHashes(newTitle);
+            const finalContent = stripProfanityHashes(newText);
             const newMain = editForm.querySelector("#edit-image").value.trim() || null;
             const newExtras = [
                 editForm.querySelector("#edit-extra-1").value.trim(),
@@ -641,8 +1049,8 @@ function showArticleModal(cardEl, data, autoEdit = false) {
             try {
                 if (id) {
                     await updateDoc(doc(db, "Article", id), {
-                        titre: newTitle,
-                        contenu: newText,
+                        titre: finalTitle,
+                        contenu: finalContent,
                         main: newMain,
                         extras: newExtras
                     });
@@ -651,8 +1059,8 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                     const arr = loadLocalArticles();
                     const idx = arr.findIndex(a => a._localId === localId);
                     if (idx !== -1) {
-                        arr[idx].titre = newTitle;
-                        arr[idx].contenu = newText;
+                        arr[idx].titre = finalTitle;
+                        arr[idx].contenu = finalContent;
                         arr[idx].main = newMain;
                         arr[idx].extras = newExtras;
                         saveLocalArticles(arr);
@@ -660,17 +1068,17 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                 }
 
                 // Update UI in background
-                data.title = newTitle;
-                data.text = newText;
+                data.title = finalTitle;
+                data.text = finalContent;
                 data.main = newMain;
                 data.extras = newExtras;
 
                 // Update Card UI
                 if (cardEl) {
                     const cardTitle = cardEl.querySelector(".card-title");
-                    if (cardTitle) cardTitle.textContent = newTitle;
+                    if (cardTitle) cardTitle.textContent = finalTitle;
                     const cardExcerpt = cardEl.querySelector(".card-excerpt");
-                    if (cardExcerpt) cardExcerpt.textContent = stripHtml(newText);
+                    if (cardExcerpt) cardExcerpt.textContent = stripHtml(finalContent);
                     
                     const oldImg = cardEl.querySelector(".card-image");
                     const wrapper = cardEl.querySelector(".card-image-wrapper");
@@ -833,86 +1241,215 @@ async function showAdminPanel() {
             <h2 class="admin-title">${t.adminTitle}</h2>
             <button class="btn btn-ghost" id="admin-close">${t.adminClose}</button>
         </div>
-        <div class="admin-content">
-            <div class="admin-list" id="admin-article-list">
-                <div class="btn-spinner"></div>
-            </div>
+        <div class="admin-tabs">
+            <button class="admin-tab active" id="tab-articles">${currentLang === 'fr' ? 'Articles' : 'Articles'}</button>
+            <button class="admin-tab" id="tab-banned">${currentLang === 'fr' ? 'Mots Interdits' : 'Banned Words'}</button>
+        </div>
+        <div class="admin-content" id="admin-main-content">
+            <div class="btn-spinner" style="margin: 40px auto; display: block;"></div>
         </div>
     `;
 
     document.body.appendChild(overlay);
     document.body.style.overflow = "hidden";
 
-    document.getElementById("admin-close").onclick = () => {
+    const contentArea = overlay.querySelector("#admin-main-content");
+    const tabArticles = overlay.querySelector("#tab-articles");
+    const tabBanned = overlay.querySelector("#tab-banned");
+
+    const closeAdmin = () => {
         overlay.remove();
         document.body.style.overflow = "";
     };
+    overlay.querySelector("#admin-close").onclick = closeAdmin;
 
-    const list = document.getElementById("admin-article-list");
+    async function renderArticles() {
+        tabArticles.classList.add("active");
+        tabBanned.classList.remove("active");
+        contentArea.innerHTML = `
+            <div style="background: rgba(255, 159, 67, 0.1); border: 1px solid rgba(255, 159, 67, 0.2); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; color: #ff9f43; display: flex; align-items: start; gap: 12px;">
+                <span style="font-size: 1.2rem; transform: translateY(-2px);">💡</span>
+                <div>
+                    <strong style="display: block; margin-bottom: 4px;">Astuce d'administrateur :</strong>
+                    ${currentLang === 'fr' 
+                        ? 'Pour contourner le filtre de mots interdits, entourez le mot de dièses. Exemple: <code>#mot#</code>.' 
+                        : 'To bypass the profanity filter, wrap the word in hashes. Example: <code>#word#</code>.'}
+                </div>
+            </div>
+            <div class="admin-list" id="admin-article-list">
+                <div class="btn-spinner"></div>
+            </div>
+        `;
+        const list = contentArea.querySelector("#admin-article-list");
+        try {
+            const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
+            const snapshot = await getDocs(q);
+            list.innerHTML = "";
+            if (snapshot.empty) {
+                list.innerHTML = `<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.3);">${currentLang === 'fr' ? 'Aucun article trouvé.' : 'No articles found.'}</div>`;
+                return;
+            }
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const id = docSnap.id;
+                const item = document.createElement("div");
+                item.className = "admin-item" + (data.type === 'note' ? ' admin-note' : '');
+                
+                const createdAt = data.createdAt?.toDate?.() || new Date();
+                const typeLabel = data.type === 'note' ? '<span class="admin-note-badge">NOTE</span>' : '';
 
-    try {
-        const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
-        list.innerHTML = "";
+                item.innerHTML = `
+                    <div class="admin-item-info">
+                        <div class="admin-item-title">${data.titre || data.title}${typeLabel}</div>
+                        <div class="admin-item-meta">${formatDate(createdAt)} | Lang: ${(data.lang || 'fr').toUpperCase()}</div>
+                    </div>
+                    <div class="admin-item-actions">
+                        <button class="btn btn-edit btn-sm" data-id="${id}">${t.btnModifier || 'Modifier'}</button>
+                        <button class="btn btn-danger btn-sm" data-id="${id}">${t.btnSupprimer || 'Supprimer'}</button>
+                    </div>
+                `;
 
-        if (snapshot.empty) {
-            list.innerHTML = "Aucun article.";
-            return;
+                item.querySelector(".btn-edit").onclick = () => {
+                    const dummyCard = document.createElement("div");
+                    dummyCard.dataset.id = id;
+                    showArticleModal(dummyCard, {
+                        title: data.titre || data.title || "",
+                        text: data.contenu || data.content || "",
+                        main: data.main || null,
+                        extras: data.extras || [],
+                        date: createdAt,
+                        lang: data.lang || "fr",
+                        type: data.type || "article"
+                    }, true);
+                };
+
+                item.querySelector(".btn-danger").onclick = async () => {
+                    if (confirm(currentLang === 'fr' ? "Supprimer définitivement cet élément ?" : "Delete this item permanently?")) {
+                        try {
+                            await deleteDoc(doc(db, "Article", id));
+                            item.remove();
+                            showToast(t.toastSupprime || "Supprimé", "success");
+                            loadArticles(); 
+                        } catch (e) {
+                            showToast("Error", "error");
+                        }
+                    }
+                };
+                list.appendChild(item);
+            });
+        } catch (err) {
+            list.innerHTML = `<div style="color: #ff4d4d; text-align: center; padding: 20px;">Erreur lors du chargement des articles.</div>`;
         }
+    }
 
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const id = docSnap.id;
-            const item = document.createElement("div");
-            item.className = "admin-item";
+    async function renderBannedWords() {
+        tabArticles.classList.remove("active");
+        tabBanned.classList.add("active");
+        contentArea.innerHTML = `
+            <div class="banned-manager-header" style="flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 8px; width: 100%;">
+                    <input type="text" id="banned-search" class="form-input" placeholder="${currentLang === 'fr' ? 'Rechercher ou ajouter un mot...' : 'Search or add a word...'}" style="flex: 1;">
+                    <button id="add-banned-btn" class="btn btn-primary" style="min-width: 100px;">${currentLang === 'fr' ? 'Ajouter' : 'Add'}</button>
+                </div>
+                <div id="search-status" style="font-size: 0.85rem; color: rgba(255,255,255,0.5); padding-left: 4px;"></div>
+            </div>
+            <div class="admin-list" id="admin-banned-list"></div>
+        `;
+        const list = contentArea.querySelector("#admin-banned-list");
+        const input = contentArea.querySelector("#banned-search");
+        const addBtn = contentArea.querySelector("#add-banned-btn");
+        const status = contentArea.querySelector("#search-status");
+
+        const updateList = () => {
+            const query = input.value.trim().toLowerCase();
+            list.innerHTML = "";
             
-            const createdAt = data.createdAt?.toDate?.() || new Date();
-            const lang = data.lang || "fr";
+            if (!query) {
+                status.textContent = currentLang === 'fr' ? "Affichage des mots personnalisés" : "Showing custom words";
+                const customWords = Array.from(CUSTOM_BANNED_WORDS_REFS.keys()).sort();
+                if (customWords.length === 0) {
+                    list.innerHTML = `<div style="text-align: center; color: rgba(255,255,255,0.3); padding: 40px;">${currentLang === 'fr' ? 'Aucun mot banni personnalisé.' : 'No custom banned words.'}</div>`;
+                    return;
+                }
+                customWords.forEach(word => createBannedItem(word, list, true));
+            } else {
+                // Search in ALL banned words (default + custom)
+                const results = Array.from(BANNED_WORDS).filter(w => w.includes(query)).slice(0, 50);
+                status.textContent = `${results.length > 0 ? results.length : 0} ${currentLang === 'fr' ? 'résultats correspondants' : 'results found'}`;
+                
+                results.forEach(word => {
+                    const isCustom = CUSTOM_BANNED_WORDS_REFS.has(word);
+                    createBannedItem(word, list, isCustom);
+                });
+            }
+        };
+
+        const createBannedItem = (word, container, isCustom) => {
+            const item = document.createElement("div");
+            item.className = "banned-word-item";
+            
+            const isWhitelisted = WHITELISTED_WORDS.has(word);
+            const wordStyle = isWhitelisted ? 'text-decoration: line-through; opacity: 0.5; color: #fff;' : '';
+            const actionText = isWhitelisted ? (currentLang === 'fr' ? 'Bloquer' : 'Block') : (currentLang === 'fr' ? 'Autoriser' : 'Allow');
+            const actionColor = isWhitelisted ? '#ff9f43' : '#4dff88';
 
             item.innerHTML = `
-                <div class="admin-item-info">
-                    <div class="admin-item-title">${data.titre || data.title}</div>
-                    <div class="admin-item-meta">${formatDate(createdAt)} | Lang: ${lang.toUpperCase()}</div>
-                </div>
-                <div class="admin-item-actions">
-                    <button class="btn btn-edit btn-sm" data-id="${id}">${t.btnModifier}</button>
-                    <button class="btn btn-danger btn-sm" data-id="${id}">${t.btnSupprimer}</button>
+                <span class="banned-word-text" style="${wordStyle}">${word} ${!isCustom ? '<small style="opacity:0.5; font-size:0.7em;">(par défaut)</small>' : ''}</span>
+                <div style="display: flex; gap: 8px;">
+                    ${!isCustom ? `
+                        <button class="btn btn-ghost btn-sm btn-whitelist" style="color: ${actionColor}; font-size: 0.75rem; border: 1px solid rgba(255,255,255,0.1);">${actionText}</button>
+                    ` : `
+                        <button class="btn btn-ghost btn-sm btn-delete" style="color: #ff4d4d;">✕</button>
+                    `}
                 </div>
             `;
 
-            // Delete Logic
-            item.querySelector(".btn-danger").onclick = async () => {
-                try {
-                    await deleteDoc(doc(db, "Article", id));
+            if (isCustom) {
+                item.querySelector(".btn-delete").onclick = async () => {
+                    await deleteCustomBannedWord(word);
                     item.remove();
-                    showToast(t.toastSupprime, "success");
-                    loadArticles(); // Refresh main grid
-                } catch (e) {
-                    showToast("Error", "error");
-                }
-            };
-
-            // Edit Logic - We reuse the existing modal logic by creating a dummy card element
-            item.querySelector(".btn-edit").onclick = () => {
-                const dummyCard = document.createElement("div");
-                dummyCard.dataset.id = id;
-                const articleData = {
-                    title: data.titre || data.title || "",
-                    text: data.contenu || data.content || "",
-                    main: data.main || null,
-                    extras: data.extras || [],
-                    date: createdAt
+                    showToast(`"${word}" supprimé`, "info");
                 };
-                
-                // We need to slightly refactor showArticleModal to accept an "autoEnterEdit" flag
-                showArticleModal(dummyCard, articleData, true); 
-            };
+            } else {
+                item.querySelector(".btn-whitelist").onclick = async () => {
+                    if (isWhitelisted) {
+                        await removeFromWhitelist(word);
+                        showToast(`"${word}" re-bloqué`, "info");
+                    } else {
+                        await addToWhitelist(word);
+                        showToast(`"${word}" autorisé`, "success");
+                    }
+                    updateList();
+                };
+            }
+            container.appendChild(item);
+        };
 
-            list.appendChild(item);
-        });
-    } catch (err) {
-        list.innerHTML = "Erreur de chargement.";
+        input.oninput = updateList;
+        addBtn.onclick = async () => {
+            const val = input.value.trim().toLowerCase();
+            if (!val) return;
+            addBtn.disabled = true;
+            try {
+                await addCustomBannedWord(val);
+                input.value = "";
+                updateList();
+                showToast(`"${val}" ajouté`, "success");
+            } catch (err) {
+                showToast("Erreur", "error");
+            } finally {
+                addBtn.disabled = false;
+            }
+        };
+
+        updateList();
     }
+
+    tabArticles.onclick = renderArticles;
+    tabBanned.onclick = renderBannedWords;
+
+    // Initial view
+    renderArticles();
 }
 
 // ---------- UI State ----------
@@ -954,7 +1491,8 @@ async function loadArticles() {
                         main: a.main || null,
                         extras: a.extras || [],
                         date: a.createdAt || null,
-                        lang: a.lang || "fr"
+                        lang: a.lang || "fr",
+                        type: a.type || "article"
                     });
                     if (a._localId) node.dataset.localId = a._localId;
                     container.appendChild(node);
@@ -980,7 +1518,8 @@ async function loadArticles() {
                         main: data.main || null,
                         extras: data.extras || [],
                         date: createdAt,
-                        lang: articleLang || "fr"
+                        lang: articleLang || "fr",
+                        type: data.type || "article"
                     },
                     d.id
                 );
@@ -1003,7 +1542,8 @@ async function loadArticles() {
                 main: a.main || null,
                 extras: a.extras || [],
                 date: a.createdAt || null,
-                lang: a.lang || "fr"
+                lang: a.lang || "fr",
+                type: a.type || "article"
             });
             if (a._localId) node.dataset.localId = a._localId;
             container.appendChild(node);
@@ -1023,10 +1563,45 @@ async function publishArticle() {
     const text = quill ? quill.root.innerHTML : "";
     const mainImage = mainImageEl?.value.trim() || null;
 
-    if (!title && !text) {
-        showToast("Ajoutez un titre ou du contenu avant de publier.", "error");
+    if (!title) {
+        showToast(currentLang === 'fr' ? "Veuillez ajouter un titre." : "Please add a title.", "error");
         return;
     }
+
+    // Strip HTML to check if content is actually empty (Quill might return <p><br></p>)
+    const plainText = stripHtml(text).trim();
+    if (!plainText) {
+        showToast(currentLang === 'fr' ? "Veuillez ajouter du contenu." : "Please add some content.", "error");
+        return;
+    }
+
+    // Profanity check - Title
+    const titleBadWord = containsProfanity(title);
+    if (titleBadWord) {
+        showToast(
+            currentLang === 'fr' ? `Gros mot détecté dans le titre. Cliquez pour voir.` : `Profanity detected in title. Click to see.`,
+            "error",
+            5000,
+            () => highlightProfanityInInput(titleEl, titleBadWord)
+        );
+        return;
+    }
+
+    // Profanity check - Content
+    const contentBadWord = containsProfanity(plainText);
+    if (contentBadWord) {
+        showToast(
+            currentLang === 'fr' ? `Gros mot détecté dans le contenu. Cliquez pour voir.` : `Profanity detected in content. Click to see.`,
+            "error",
+            5000,
+            () => highlightProfanityInQuill(quill, contentBadWord)
+        );
+        return;
+    }
+
+    // Clean hashes before saving
+    const finalTitle = stripProfanityHashes(title);
+    const finalContent = stripProfanityHashes(text);
 
     const extras = [];
     for (let i = 1; i <= 3; i++) {
@@ -1045,20 +1620,23 @@ async function publishArticle() {
 
     try {
         const docRef = await addDoc(collection(db, "Article"), {
-            titre: title,
-            contenu: text,
-            main: mainImage,
-            extras: extras,
+            titre: finalTitle,
+            contenu: finalContent,
+            main: currentType === 'note' ? null : mainImage,
+            extras: currentType === 'note' ? [] : extras,
+            type: currentType,
             lang: currentLang,
             createdAt: serverTimestamp(),
         });
 
         node = buildArticleCard(
-            { title, text, main: mainImage, extras, date: new Date() },
+            { title: finalTitle, text: finalContent, main: currentType === 'note' ? null : mainImage, extras: currentType === 'note' ? [] : extras, date: new Date(), type: currentType },
             docRef.id
         );
 
-        showToast("Article publié avec succès !", "success");
+        showToast(currentType === 'note' 
+            ? (currentLang === 'fr' ? 'Note publiée !' : 'Note published!') 
+            : (currentLang === 'fr' ? 'Article publié avec succès !' : 'Article published!'), "success");
     } catch (err) {
         console.warn("Échec Firestore, sauvegarde locale", err);
 
@@ -1131,6 +1709,7 @@ function clearForm() {
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", async () => {
     initQuill();
+    initTypeToggle();
     initNavbar();
     initImagePreview();
     translateUI();
@@ -1152,5 +1731,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    const banTrigger = document.getElementById("ban-list-trigger");
+    if (banTrigger) {
+        banTrigger.addEventListener("click", showBanList);
+    }
+
+    const titleInput = document.getElementById('title');
+    if (titleInput) {
+        titleInput.addEventListener('input', () => {
+            const hasProfanity = containsProfanity(titleInput.value);
+            titleInput.classList.toggle('input-profanity', !!hasProfanity);
+        });
+    }
+
+    await loadCustomBannedWords();
     await loadArticles();
 });

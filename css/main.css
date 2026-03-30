@@ -1224,3 +1224,246 @@ body {
     color: var(--accent-blue) !important;
     text-decoration: underline;
 }
+/* ---------- Type Toggle (Article / Note) ---------- */
+.type-toggle {
+    display: flex;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.type-toggle-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.type-toggle-btn:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.type-toggle-btn.active {
+    color: var(--text-primary);
+    background: rgba(108, 138, 255, 0.1);
+}
+
+.type-toggle-btn.active[data-type="article"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 25%;
+    width: 50%;
+    height: 2px;
+    background: var(--accent-blue);
+    border-radius: 2px;
+}
+
+.type-toggle-btn.active[data-type="note"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 25%;
+    width: 50%;
+    height: 2px;
+    background: #ff9f43;
+    border-radius: 2px;
+}
+
+.type-toggle-btn.active[data-type="note"] {
+    background: rgba(255, 159, 67, 0.1);
+    color: #ff9f43;
+}
+
+/* ---------- Note Card (Orange Theme) ---------- */
+.article-card.note-card {
+    border: 1px solid rgba(255, 159, 67, 0.3);
+}
+
+.article-card.note-card:hover {
+    border-color: rgba(255, 159, 67, 0.5);
+    box-shadow: 0 15px 40px rgba(255, 159, 67, 0.1);
+}
+
+.article-card.note-card .card-placeholder {
+    background: linear-gradient(135deg, rgba(255, 159, 67, 0.15), rgba(255, 107, 53, 0.08));
+}
+
+.article-card.note-card .card-tag {
+    background: rgba(255, 159, 67, 0.15);
+    color: #ff9f43;
+}
+
+.note-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(255, 159, 67, 0.15);
+    color: #ff9f43;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 4px;
+}
+
+/* Admin panel note item */
+.admin-item.admin-note {
+    border-left: 3px solid #ff9f43;
+}
+
+.admin-note-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(255, 159, 67, 0.15);
+    color: #ff9f43;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 3px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+#image-fields {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 500px;
+    opacity: 1;
+    overflow: hidden;
+}
+
+#image-fields.hidden {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+}
+
+.form-switch-anim {
+    animation: form-switch-fade 0.4s ease;
+}
+
+@keyframes form-switch-fade {
+    0% { opacity: 0.7; transform: translateY(5px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Profanity Highlighting ---------- */
+.profanity-highlight-error {
+    border-color: #ff4d4d !important;
+    box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.2) !important;
+    animation: profanity-shake 0.4s ease;
+}
+
+@keyframes profanity-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.toast-error {
+    border-left: 4px solid #ff4d4d;
+}
+
+.toast.clickable:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+/* ---------- Live Profanity Highlighting (Word-style) ---------- */
+.ql-profanity {
+    text-decoration: underline wavy #ff4d4d !important;
+    text-underline-offset: 3px;
+}
+
+.input-profanity {
+    border-color: #ff4d4d !important;
+    box-shadow: 0 0 0 1px #ff4d4d !important;
+    color: #ff4d4d !important;
+}
+
+.input-profanity::placeholder {
+    color: rgba(255, 77, 77, 0.5) !important;
+}
+
+/* Enhanced Content Error State */
+.editor-wrapper.input-profanity {
+    border: 1px solid #ff4d4d !important;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.1);
+    border-radius: 8px;
+}
+
+.editor-wrapper.input-profanity .ql-toolbar.ql-snow,
+.editor-wrapper.input-profanity .ql-container.ql-snow {
+    border-color: transparent !important; /* Let the wrapper handle the border */
+}
+
+/* ---------- Admin Panel Tabs ---------- */
+.admin-tabs {
+    display: flex;
+    gap: 10px;
+    padding: 15px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-tab {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 8px 18px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    border-radius: 8px;
+}
+
+.admin-tab.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.admin-tab:hover:not(.active) {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Banned Words Manager List */
+.banned-manager-header {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.banned-word-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 8px;
+}
+
+.banned-word-text {
+    font-family: monospace;
+    color: #ff4d4d;
+}
