@@ -35,9 +35,10 @@
             </a>
             <div class="nav-links">
                 <a href="#create" class="nav-link">Créer</a>
+                <a href="#actualites" class="nav-link">Actualités</a>
                 <a href="#articles" class="nav-link">Articles</a>
                 <button id="settings-btn" class="nav-link btn-settings" style="background:none; border:none; cursor:pointer;" aria-label="Paramètres">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 </button>
             </div>
         </div>
@@ -97,18 +98,31 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="author-name" class="form-label">Votre Pseudo (Auteur)</label>
+                    <input type="text" id="author-name" class="form-input" placeholder="Ex: AstroUser12" maxlength="30">
+                </div>
+
                 <!-- Image fields (hidden for Notes) -->
                 <div id="image-fields">
-                    <div class="form-group">
+                    <div class="form-group" id="main-media-group">
                         <label for="main-image" class="form-label">
-                            Image principale
-                            <span class="label-hint">URL (optionnel)</span>
+                            Média principal (Image ou Vidéo)
+                            <span class="label-hint">Drag & Drop ou URL</span>
                         </label>
-                        <input type="url" id="main-image" class="form-input" placeholder="https://exemple.com/image-nebuleuse.jpg">
-                        <div id="main-image-preview" class="image-preview hidden"></div>
+                        <div id="media-dropzone" class="media-dropzone">
+                            <input type="file" id="media-file-input" class="hidden-input" accept="image/*,video/*">
+                            <div class="dropzone-content">
+                                <div class="dropzone-icon">🌌</div>
+                                <p>Glissez-déposez un média ou cliquez pour parcourir</p>
+                                <p class="dropzone-sub">Images ou Vidéos (max 50Mo)</p>
+                            </div>
+                            <div id="media-preview-container" class="media-preview-container hidden"></div>
+                        </div>
+                        <input type="url" id="main-image" class="form-input" placeholder="Ou collez l'URL directe ici...">
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group hidden" id="extra-images-group">
                         <label class="form-label">
                             Images supplémentaires
                             <span class="label-hint">jusqu'à 3 URLs</span>
@@ -118,6 +132,19 @@
                             <input type="url" id="additional-image-2" class="form-input" placeholder="URL image 2">
                             <input type="url" id="additional-image-3" class="form-input" placeholder="URL image 3">
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Sources
+                            <span class="label-hint">Références & Liens</span>
+                        </label>
+                        <div id="sources-container" class="sources-container">
+                            <!-- Dynamic source rows go here -->
+                        </div>
+                        <button type="button" id="add-source-btn" class="btn btn-ghost btn-sm" style="margin-top: 10px; gap: 6px;">
+                            <span style="font-size: 1.2rem; line-height: 1;">+</span> Source
+                        </button>
                     </div>
                 </div>
 
@@ -134,12 +161,44 @@
             </form>
         </section>
 
+        <!-- Actualités Section (ArXiv Daily Feed) -->
+        <section class="section" id="actualites">
+            <div class="section-header">
+                <span class="section-tag">📰 Actualités</span>
+                <h2 class="section-title">Actualités Astrophysiques</h2>
+                <div class="arxiv-refresh-container">
+                    <p class="section-desc">2 articles récents sélectionnés quotidiennement depuis ArXiv.</p>
+                    <div id="arxiv-cooldown" class="arxiv-cooldown" title="Temps restant avant le prochain renouvellement">
+                        <span class="cooldown-icon">⏳</span>
+                        <span id="cooldown-timer">--:--:--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="arxiv-loading" class="arxiv-grid">
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+            </div>
+
+            <div id="arxiv-container" class="arxiv-grid"></div>
+        </section>
+
         <!-- Articles Section -->
         <section class="section" id="articles">
             <div class="section-header">
                 <span class="section-tag">📡 Publications</span>
                 <h2 class="section-title">Articles publiés</h2>
                 <p class="section-desc">Découvrez les dernières publications de la communauté.</p>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-wrapper">
+                    <input type="text" id="public-search" class="search-input" placeholder="Rechercher par titre...">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </div>
             </div>
 
             <!-- Loading skeleton -->

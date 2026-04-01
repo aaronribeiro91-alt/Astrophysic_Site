@@ -7,6 +7,8 @@ import {
     getFirestore,
     collection,
     getDocs,
+    getDoc,
+    setDoc,
     addDoc,
     doc,
     deleteDoc,
@@ -14,8 +16,16 @@ import {
     serverTimestamp,
     query,
     where,
-    orderBy
+    orderBy,
+    limit
 } from "firebase/firestore";
+
+import { 
+    getStorage, 
+    ref, 
+    uploadBytes, 
+    getDownloadURL 
+} from "firebase/storage";
 
 import { profanities as profanitiesEN } from "profanities";
 import { profanities as profanitiesFR } from "profanities/fr";
@@ -42,11 +52,22 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const storage = getStorage(app);
+
+// ---------- Media & State ----------
+let selectedMediaFile = null;
+let videoThumbnail = null;
+let mediaType = 'image'; // 'image' or 'video'
+
+// ---------- Search State ----------
+let allLoadedArticles = []; // Stores public articles for search
+let adminArticlesList = []; // Stores admin articles for search
 
 // ---------- Translations ----------
 const TRANSLATIONS = {
     fr: {
         navCreate: "Créer",
+        navActualites: "Actualités",
         navArticles: "Articles",
         heroBadge: "🔭 Explorez l'infini",
         heroTitle1: "Partagez vos découvertes",
@@ -85,10 +106,19 @@ const TRANSLATIONS = {
         settingsTitle: "Paramètres",
         settingsLang: "Langue du site",
         langFR: "Français",
-        langEN: "English"
+        langEN: "English",
+        labelSources: "Sources",
+        btnSources: "Sources",
+        placeholderSourceName: "Nom (ex: NASA)",
+        placeholderSourceUrl: "Lien (URL)",
+        tabArxiv: "ArXiv",
+        btnSelectTomorrow: "Choisir pour demain",
+        toastArxivSelected: "Article sélectionné pour demain !",
+        arxivLibraryDesc: "Sélectionnez un article pour qu'il soit mis en avant demain."
     },
     en: {
         navCreate: "Create",
+        navActualites: "News",
         navArticles: "Articles",
         heroBadge: "🔭 Explore the infinity",
         heroTitle1: "Share your cosmic",
@@ -127,13 +157,684 @@ const TRANSLATIONS = {
         settingsTitle: "Settings",
         settingsLang: "Site Language",
         langFR: "French",
-        langEN: "English"
+        langEN: "English",
+        labelSources: "Sources",
+        btnSources: "Sources",
+        placeholderSourceName: "Name (ex: NASA)",
+        placeholderSourceUrl: "Link (URL)",
+        tabArxiv: "ArXiv",
+        btnSelectTomorrow: "Select for tomorrow",
+        toastArxivSelected: "Article selected for tomorrow!",
+        arxivLibraryDesc: "Select an article to be featured tomorrow."
     }
 };
 
 let currentLang = localStorage.getItem("cosmos_lang") || "fr";
 let currentType = "article"; // 'article' or 'note'
+let hasNoteAccess = false;
 let quill;
+
+// ---------- Passcode Modal (iPhone/Safe Style) ----------
+function showPasscodeModal() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'passcode-overlay';
+        
+        overlay.innerHTML = `
+            <div class="passcode-modal">
+                <div class="passcode-header">
+                    <div class="passcode-title">${currentLang === 'fr' ? 'Accès Restreint' : 'Restricted Access'}</div>
+                    <div class="passcode-dots">
+                        <div class="passcode-dot"></div>
+                        <div class="passcode-dot"></div>
+                        <div class="passcode-dot"></div>
+                        <div class="passcode-dot"></div>
+                    </div>
+                </div>
+                <div class="passcode-keypad">
+                    <div class="keypad-btn" data-val="1">1</div>
+                    <div class="keypad-btn" data-val="2">2</div>
+                    <div class="keypad-btn" data-val="3">3</div>
+                    <div class="keypad-btn" data-val="4">4</div>
+                    <div class="keypad-btn" data-val="5">5</div>
+                    <div class="keypad-btn" data-val="6">6</div>
+                    <div class="keypad-btn" data-val="7">7</div>
+                    <div class="keypad-btn" data-val="8">8</div>
+                    <div class="keypad-btn" data-val="9">9</div>
+                    <div class="keypad-btn action" data-val="cancel">${currentLang === 'fr' ? 'Annuler' : 'Cancel'}</div>
+                    <div class="keypad-btn" data-val="0">0</div>
+                    <div class="keypad-btn action" data-val="clear">${currentLang === 'fr' ? 'Effacer' : 'Clear'}</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        
+        // Trigger animation
+        setTimeout(() => overlay.classList.add('active'), 10);
+
+        const dots = overlay.querySelectorAll('.passcode-dot');
+        const modal = overlay.querySelector('.passcode-modal');
+        let tempCode = "";
+
+        const updateDots = () => {
+            dots.forEach((dot, idx) => {
+                dot.classList.toggle('active', idx < tempCode.length);
+                dot.classList.remove('error');
+            });
+        };
+
+        const handleInput = async (val) => {
+            if (val === 'cancel') {
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.remove(), 400);
+                resolve(false);
+                return;
+            }
+            if (val === 'clear') {
+                tempCode = "";
+                updateDots();
+                return;
+            }
+
+            if (tempCode.length < 4) {
+                tempCode += val;
+                updateDots();
+
+                if (tempCode.length === 4) {
+                    if (tempCode === '1216') {
+                        // Success!
+                        overlay.classList.remove('active');
+                        setTimeout(() => overlay.remove(), 400);
+                        resolve(true);
+                    } else {
+                        // Error
+                        modal.classList.add('passcode-error-shake');
+                        dots.forEach(dot => dot.classList.add('error'));
+                        
+                        setTimeout(() => {
+                            modal.classList.remove('passcode-error-shake');
+                            tempCode = "";
+                            updateDots();
+                        }, 600);
+                    }
+                }
+            }
+        };
+
+        overlay.querySelectorAll('.keypad-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleInput(btn.dataset.val);
+            });
+        });
+
+        // Close on overlay click (cancel)
+        overlay.addEventListener('click', () => handleInput('cancel'));
+        modal.addEventListener('click', (e) => e.stopPropagation());
+    });
+}
+
+// ---------- Media Handling ----------
+function initMediaDropzone() {
+    const dropzone = document.getElementById('media-dropzone');
+    const fileInput = document.getElementById('media-file-input');
+    const previewContainer = document.getElementById('media-preview-container');
+    const mainImageInput = document.getElementById('main-image');
+
+    if (!dropzone || !fileInput) return;
+
+    // Click to select
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Drag & Drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+        dropzone.addEventListener(evt, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    dropzone.addEventListener('dragover', () => dropzone.classList.add('dragover'));
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', e => {
+        dropzone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) handleMediaFile(files[0]);
+    });
+
+    fileInput.addEventListener('change', e => {
+        if (e.target.files.length) handleMediaFile(e.target.files[0]);
+    });
+
+    // Handle URL input fallback
+    if (mainImageInput) {
+        mainImageInput.addEventListener('input', () => {
+            if (mainImageInput.value.trim()) {
+                clearMediaFile();
+            }
+        });
+    }
+}
+
+function handleMediaFile(file) {
+    if (!file) return;
+    
+    selectedMediaFile = file;
+    const previewContainer = document.getElementById('media-preview-container');
+    const dropzoneContent = document.querySelector('.dropzone-content');
+    const extraImagesGroup = document.getElementById('extra-images-group');
+    if (!previewContainer) return;
+    
+    previewContainer.innerHTML = '';
+    previewContainer.classList.remove('hidden');
+    if (dropzoneContent) dropzoneContent.style.opacity = '0';
+
+    if (file.type.startsWith('image/')) {
+        mediaType = 'image';
+        if (extraImagesGroup) extraImagesGroup.classList.add('hidden');
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            previewContainer.appendChild(img);
+            addRemoveButton(previewContainer);
+        };
+        reader.readAsDataURL(file);
+    } else if (file.type.startsWith('video/')) {
+        mediaType = 'video';
+        if (extraImagesGroup) extraImagesGroup.classList.remove('hidden');
+        generateVideoThumbnail(file).then(thumb => {
+            videoThumbnail = thumb;
+            const video = document.createElement('video');
+            video.src = URL.createObjectURL(file);
+            video.muted = true;
+            video.autoplay = true;
+            video.loop = true;
+            previewContainer.appendChild(video);
+            
+            const indicator = document.createElement('div');
+            indicator.className = 'video-indicator';
+            indicator.innerHTML = '<span>📹</span> Vidéo détectée';
+            previewContainer.appendChild(indicator);
+            
+            addRemoveButton(previewContainer);
+        });
+    }
+}
+
+function addRemoveButton(container) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-remove-media';
+    btn.innerHTML = '✕';
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        clearMediaFile();
+    };
+    container.appendChild(btn);
+}
+
+function clearMediaFile() {
+    selectedMediaFile = null;
+    videoThumbnail = null;
+    mediaType = 'image';
+    const previewContainer = document.getElementById('media-preview-container');
+    const dropzoneContent = document.querySelector('.dropzone-content');
+    const fileInput = document.getElementById('media-file-input');
+    const extraImagesGroup = document.getElementById('extra-images-group');
+    
+    if (previewContainer) {
+        previewContainer.innerHTML = '';
+        previewContainer.classList.add('hidden');
+    }
+    if (extraImagesGroup) extraImagesGroup.classList.add('hidden');
+    if (dropzoneContent) dropzoneContent.style.opacity = '1';
+    if (fileInput) fileInput.value = '';
+}
+
+function generateVideoThumbnail(file) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        video.src = URL.createObjectURL(file);
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+        
+        video.onloadedmetadata = () => {
+            video.currentTime = 1; 
+        };
+        
+        video.onseeked = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+            URL.revokeObjectURL(video.src);
+        };
+        
+        video.onerror = () => resolve(null);
+    });
+}
+
+// ---------- Sources Manager ----------
+function addSourceField(name = '', url = '') {
+    const container = document.getElementById('sources-container');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'source-row';
+    row.innerHTML = `
+        <input type="text" class="form-input source-name" placeholder="Nom (ex: NASA)" value="${name}">
+        <input type="url" class="form-input source-url" placeholder="Lien (URL)" value="${url}">
+        <button type="button" class="btn-remove-source" title="Supprimer">✕</button>
+    `;
+
+    row.querySelector('.btn-remove-source').onclick = () => {
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(20px)';
+        setTimeout(() => row.remove(), 200);
+    };
+
+    container.appendChild(row);
+}
+
+function initSourcesManager() {
+    const addBtn = document.getElementById('add-source-btn');
+    if (addBtn) {
+        addBtn.onclick = () => addSourceField();
+    }
+}
+
+function getSourcesData() {
+    const rows = document.querySelectorAll('.source-row');
+    const sources = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.source-name').value.trim();
+        const url = row.querySelector('.source-url').value.trim();
+        if (name || url) {
+            sources.push({ name: name || url, url });
+        }
+    });
+    return sources;
+}
+
+function showSourcesPopup(sources) {
+    if (!sources || sources.length === 0) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-container';
+    modal.style.maxWidth = '400px';
+
+    modal.innerHTML = `
+        <button class="modal-close">✕</button>
+        <h2 class="modal-title" style="margin-bottom: 20px;">Sources & Références</h2>
+        <div class="sources-modal-list">
+            ${sources.map(s => `
+                <a href="${s.url || '#'}" target="_blank" class="source-modal-item">
+                    ${s.name}
+                    ${s.url ? `<span>${s.url}</span>` : ''}
+                </a>
+            `).join('')}
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    modal.querySelector('.modal-close').onclick = () => overlay.remove();
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+// ---------- ArXiv Actualités (Daily Feed) ----------
+const ARXIV_CACHE_KEY = "cosmos_arxiv_cache_v3";
+const NASA_CACHE_KEY = "cosmos_nasa_cache_v3";
+
+// Proxy list for CORS bypass (fallback chain)
+const CORS_PROXIES = [
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+];
+
+async function fetchViaProxy(url) {
+    for (const makeProxy of CORS_PROXIES) {
+        try {
+            const proxyUrl = makeProxy(url);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+            const res = await fetch(proxyUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (!res.ok) continue;
+            return await res.text();
+        } catch (_) { continue; }
+    }
+    return null;
+}
+
+function getTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseArxivXml(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, "text/xml");
+    const entries = doc.querySelectorAll("entry");
+    const articles = [];
+
+    entries.forEach(entry => {
+        const title = entry.querySelector("title")?.textContent?.replace(/\s+/g, ' ').trim() || "";
+        const summary = entry.querySelector("summary")?.textContent?.replace(/\s+/g, ' ').trim() || "";
+        const published = entry.querySelector("published")?.textContent || "";
+        const id = entry.querySelector("id")?.textContent || "";
+
+        const authors = [];
+        entry.querySelectorAll("author > name").forEach(n => authors.push(n.textContent));
+
+        const links = entry.querySelectorAll("link");
+        let pdfLink = "";
+        let absLink = id;
+        links.forEach(l => {
+            if (l.getAttribute("title") === "pdf") pdfLink = l.getAttribute("href");
+            if (l.getAttribute("type") === "text/html") absLink = l.getAttribute("href");
+        });
+
+        articles.push({ title, summary, published, authors, id, pdfLink, absLink });
+    });
+
+    return articles;
+}
+
+async function fetchArxivArticles() {
+    const rawUrl = "https://export.arxiv.org/api/query?search_query=cat:astro-ph&sortBy=submittedDate&sortOrder=descending&max_results=20";
+    const xmlText = await fetchViaProxy(rawUrl);
+    if (!xmlText) return null;
+    return parseArxivXml(xmlText);
+}
+
+async function fetchLatestNasaArticle() {
+    // Check cache first
+    try {
+        const cache = JSON.parse(localStorage.getItem(NASA_CACHE_KEY));
+        if (cache && cache.date === getTodayStr() && cache.article) return cache.article;
+    } catch (_) {}
+
+    const html = await fetchViaProxy("https://www.nasa.gov/news/recently-published/");
+    if (!html) return null;
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // Target the specific NASA content item class
+        const items = doc.querySelectorAll(".hds-content-item");
+        let nasaArticle = null;
+
+        for (const item of items) {
+            const headingLink = item.querySelector(".hds-content-item-heading");
+            const title = headingLink ? headingLink.textContent.trim() : "";
+            const href = headingLink ? headingLink.getAttribute("href") : "";
+            const excerptEl = item.querySelector(".hds-content-item-excerpt, p");
+            const summary = excerptEl ? excerptEl.textContent.trim() : "";
+
+            // Ignore navigation items or empty titles
+            if (!title || !href || title.toLowerCase() === "news & events") continue;
+
+            const fullUrl = href.startsWith("http") ? href : `https://www.nasa.gov${href}`;
+            nasaArticle = {
+                title: title,
+                summary: summary,
+                absLink: fullUrl,
+                source: "NASA",
+                published: new Date().toISOString()
+            };
+            break; // Found the first real article
+        }
+
+        if (nasaArticle) {
+            localStorage.setItem(NASA_CACHE_KEY, JSON.stringify({ date: getTodayStr(), article: nasaArticle }));
+        }
+        return nasaArticle;
+    } catch (err) {
+        console.warn("NASA parse error:", err);
+        return null;
+    }
+}
+
+async function loadDailyArxiv() {
+    const container = document.getElementById("arxiv-container");
+    const loading = document.getElementById("arxiv-loading");
+    if (!container) return;
+
+    // Check cache
+    let finalArticles = null;
+    try {
+        const cache = JSON.parse(localStorage.getItem(ARXIV_CACHE_KEY));
+        if (cache && cache.date === getTodayStr() && cache.articles?.length >= 2) {
+            finalArticles = cache.articles;
+        }
+    } catch (_) {}
+
+    if (!finalArticles) {
+        if (loading) loading.classList.remove("hidden");
+        
+        // Fetch ArXiv + NASA in parallel
+        const [allCandidates, nasaArticle] = await Promise.all([
+            fetchArxivArticles(),
+            fetchLatestNasaArticle()
+        ]);
+
+        if (allCandidates && allCandidates.length > 0) {
+            const todayStr = getTodayStr();
+            const q = query(collection(db, "ArXivPicks"), where("scheduledFor", "==", todayStr), limit(1));
+            const pickSnap = await getDocs(q);
+            
+            finalArticles = [];
+            let pickedId = null;
+
+            if (!pickSnap.empty) {
+                const pickData = pickSnap.docs[0].data();
+                finalArticles.push(pickData);
+                pickedId = pickData.id;
+            }
+
+            const filtered = allCandidates.filter(a => a.id !== pickedId);
+            const shuffled = filtered.sort(() => Math.random() - 0.5);
+            
+            while (finalArticles.length < 2 && shuffled.length > 0) {
+                finalArticles.push(shuffled.pop());
+            }
+
+            // Add NASA article as 3rd card
+            if (nasaArticle) {
+                finalArticles.push(nasaArticle);
+            }
+
+            localStorage.setItem(ARXIV_CACHE_KEY, JSON.stringify({
+                date: todayStr,
+                articles: finalArticles
+            }));
+        }
+    }
+
+    if (loading) loading.classList.add("hidden");
+
+    if (!finalArticles || finalArticles.length === 0) {
+        container.innerHTML = `<div style="text-align:center; color: rgba(255,255,255,0.3); padding: 40px; grid-column: 1/-1;">
+            ${currentLang === 'fr' ? 'Impossible de charger les actualités.' : 'Unable to load news.'}
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    finalArticles.forEach(entry => {
+        container.appendChild(buildArxivCard(entry));
+    });
+
+    startArxivCountdown();
+}
+
+function startArxivCountdown() {
+    const timerEl = document.getElementById("cooldown-timer");
+    if (!timerEl) return;
+
+    function update() {
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setHours(24, 0, 0, 0); // Next midnight
+
+        const diff = tomorrow - now;
+        if (diff <= 0) {
+            timerEl.textContent = "00:00:00";
+            // Refresh feed if it hit zero
+            localStorage.removeItem(ARXIV_CACHE_KEY);
+            loadDailyArxiv();
+            return;
+        }
+
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+
+        timerEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    update();
+    setInterval(update, 1000);
+}
+
+function buildArxivCard(entry) {
+    const card = document.createElement("div");
+    card.className = "arxiv-card";
+
+    const isNasa = entry.source === 'NASA';
+    const pubDate = entry.published ? new Date(entry.published) : null;
+    const dateStr = pubDate ? pubDate.toLocaleDateString(currentLang === 'fr' ? 'fr-FR' : 'en-US', {
+        day: 'numeric', month: 'short', year: 'numeric'
+    }) : '';
+
+    const authorsStr = entry.authors?.slice(0, 3).join(", ") + (entry.authors?.length > 3 ? " et al." : "") || "";
+    const badge = isNasa 
+        ? '<span class="arxiv-badge nasa-badge">🚀 NASA</span>'
+        : '<span class="arxiv-badge">📡 ArXiv</span>';
+
+    card.innerHTML = `
+        <div class="arxiv-card-header">
+            ${badge}
+            <span class="arxiv-date">${dateStr}</span>
+        </div>
+        <h3 class="arxiv-card-title">${entry.title}</h3>
+        ${authorsStr ? `<p class="arxiv-card-authors">${authorsStr}</p>` : ''}
+        <p class="arxiv-card-abstract">${entry.summary}</p>
+    `;
+
+    card.onclick = () => showArxivModal(entry);
+    return card;
+}
+
+function showArxivModal(entry) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "modal-container";
+
+    const isNasa = entry.source === 'NASA';
+    const pubDate = entry.published ? new Date(entry.published) : null;
+    const dateStr = pubDate ? pubDate.toLocaleDateString(currentLang === 'fr' ? 'fr-FR' : 'en-US', {
+        day: 'numeric', month: 'long', year: 'numeric'
+    }) : '';
+
+    const authorsStr = entry.authors?.join(", ") || "";
+    const badge = isNasa 
+        ? '<span class="arxiv-badge nasa-badge">🚀 NASA</span>'
+        : '<span class="arxiv-badge">📡 ArXiv</span>';
+    const linkLabel = isNasa ? 'Voir sur NASA' : 'Voir sur ArXiv';
+
+    modal.innerHTML = `
+        <button class="modal-close">✕</button>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+            ${badge}
+            <span class="arxiv-date">${dateStr}</span>
+        </div>
+        <h2 class="modal-title">${entry.title}</h2>
+        ${authorsStr ? `<p class="arxiv-modal-authors">${authorsStr}</p>` : ''}
+        <div class="arxiv-modal-abstract">${entry.summary}</div>
+        <div class="arxiv-modal-actions">
+            ${entry.absLink ? `<a href="${entry.absLink}" target="_blank" class="arxiv-link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                ${linkLabel}
+            </a>` : ''}
+            ${entry.pdfLink ? `<a href="${entry.pdfLink}" target="_blank" class="arxiv-link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                PDF
+            </a>` : ''}
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    modal.querySelector('.modal-close').onclick = () => overlay.remove();
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+async function uploadMedia(file) {
+    const storageRef = ref(storage, `media/${Date.now()}_${file.name}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    return await getDownloadURL(snapshot.ref);
+}
+
+function showConfirmModal(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'passcode-overlay';
+        
+        overlay.innerHTML = `
+            <div class="passcode-modal">
+                <div class="passcode-header">
+                    <div class="passcode-title">${currentLang === 'fr' ? 'Confirmation' : 'Confirmation'}</div>
+                </div>
+                <div class="confirm-modal-content">
+                    <p>${message}</p>
+                    <div class="confirm-modal-actions">
+                        <button id="confirm-no" class="btn btn-ghost btn-confirm-no">${currentLang === 'fr' ? 'Annuler' : 'Cancel'}</button>
+                        <button id="confirm-yes" class="hero-cta btn-confirm-yes" style="border:none; cursor:pointer;">
+                            <span>${currentLang === 'fr' ? 'Confirmer' : 'Confirm'}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        setTimeout(() => overlay.classList.add('active'), 10);
+
+        const btnNo = overlay.querySelector('#confirm-no');
+        const btnYes = overlay.querySelector('#confirm-yes');
+
+        const close = (res) => {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 400);
+            resolve(res);
+        };
+
+        btnNo.onclick = () => close(false);
+        btnYes.onclick = () => close(true);
+        
+        const handleKey = (e) => {
+            if (e.key === 'Escape') btnNo.click();
+            if (e.key === 'Enter') btnYes.click();
+        };
+        window.addEventListener('keydown', handleKey, { once: true });
+    });
+}
 
 function initQuill() {
     const editor = document.getElementById('editor');
@@ -202,6 +903,7 @@ function translateUI() {
     // Update simple text elements
     const mappings = {
         '[href="#create"].nav-link': t.navCreate,
+        '[href="#actualites"].nav-link': t.navActualites,
         '[href="#articles"].nav-link': t.navArticles,
         '.hero-badge': t.heroBadge,
         '.hero-subtitle': t.heroSubtitle,
@@ -649,10 +1351,22 @@ function initTypeToggle() {
     const titleInput = document.getElementById('title');
 
     btns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
+            const nextType = btn.dataset.type;
+            
+            // Passcode protection for Note mode
+            if (nextType === 'note' && !hasNoteAccess) {
+                const granted = await showPasscodeModal();
+                if (granted) {
+                    hasNoteAccess = true;
+                } else {
+                    return; // Prevent switch
+                }
+            }
+
             btns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            currentType = btn.dataset.type;
+            currentType = nextType;
 
             // Add animation to the form
             const form = document.getElementById('article-form');
@@ -699,10 +1413,13 @@ function buildArticleCard(data, firestoreId) {
         title: data.title || "",
         text: data.text || "",
         main: data.main || null,
+        video: data.video || null,
         extras: (data.extras || []).slice(0, 3),
+        sources: data.sources || [],
         date: data.date || null,
         lang: data.lang || "fr",
-        type: data.type || "article"
+        type: data.type || "article",
+        author: data.author || null
     };
 
     const isNote = (data.type === 'note');
@@ -721,6 +1438,14 @@ function buildArticleCard(data, firestoreId) {
             wrapper.innerHTML = '<div class="card-placeholder">🌠</div>';
         };
         wrapper.appendChild(img);
+        
+        if (data.video) {
+            const playTag = document.createElement("div");
+            playTag.className = "video-badge";
+            playTag.innerHTML = "<span>▶</span> VIDÉO";
+            wrapper.appendChild(playTag);
+        }
+        
         card.appendChild(wrapper);
     } else {
         const emojis = isNote 
@@ -769,6 +1494,14 @@ function buildArticleCard(data, firestoreId) {
     }
 
     body.appendChild(meta);
+
+    if (data.author) {
+        const signature = document.createElement("div");
+        signature.className = "article-signature";
+        signature.textContent = `- ${data.author} -`;
+        body.appendChild(signature);
+    }
+
     card.appendChild(body);
 
     // Stagger animation
@@ -807,8 +1540,27 @@ function showArticleModal(cardEl, data, autoEdit = false) {
     h2.textContent = data.title || "Sans titre";
     modal.appendChild(h2);
 
-    // Main image
-    if (data.main) {
+    if (data.author) {
+        const signature = document.createElement("div");
+        signature.className = "article-signature";
+        signature.style.marginTop = "-15px";
+        signature.style.marginBottom = "20px";
+        signature.textContent = `- ${data.author} -`;
+        modal.appendChild(signature);
+    }
+
+    // Main media (Video takes priority)
+    if (data.video) {
+        const video = document.createElement("video");
+        video.className = "modal-video";
+        video.src = data.video;
+        video.controls = true;
+        video.poster = data.main;
+        video.style.width = "100%";
+        video.style.borderRadius = "12px";
+        video.style.marginBottom = "20px";
+        modal.appendChild(video);
+    } else if (data.main) {
         const img = document.createElement("img");
         img.className = "modal-image";
         img.src = data.main;
@@ -822,6 +1574,15 @@ function showArticleModal(cardEl, data, autoEdit = false) {
     text.className = "modal-text";
     text.innerHTML = data.text || "";
     modal.appendChild(text);
+
+    // Sources Trigger
+    if (data.sources && data.sources.length > 0) {
+        const trigger = document.createElement("div");
+        trigger.className = "article-sources-trigger";
+        trigger.innerHTML = `<span>🔗</span> ${TRANSLATIONS[currentLang].btnSources} (${data.sources.length})`;
+        trigger.onclick = () => showSourcesPopup(data.sources);
+        modal.appendChild(trigger);
+    }
 
     // Gallery
     if (data.extras && data.extras.length > 0) {
@@ -906,11 +1667,32 @@ function showArticleModal(cardEl, data, autoEdit = false) {
         // Create Form
         const editForm = document.createElement("div");
         editForm.className = "modal-edit-form";
+        
+        let sourcesHtml = '';
+        if (data.sources && data.sources.length > 0) {
+            sourcesHtml = `
+                <div class="form-group">
+                    <label class="form-label">${TRANSLATIONS[currentLang].labelSources}</label>
+                    <div id="edit-sources-container" class="sources-container">
+                        ${data.sources.map((s, i) => `
+                            <div class="source-row">
+                                <input type="text" class="form-input source-name" placeholder="${TRANSLATIONS[currentLang].placeholderSourceName}" value="${s.name}">
+                                <input type="url" class="form-input source-url" placeholder="${TRANSLATIONS[currentLang].placeholderSourceUrl}" value="${s.url}">
+                                <button type="button" class="btn-remove-source">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" id="edit-add-source-btn" class="btn btn-ghost btn-sm">+ Source</button>
+                </div>
+            `;
+        }
+
         editForm.innerHTML = `
             <div class="form-group">
                 <label class="form-label">Titre de l'article</label>
                 <input type="text" id="edit-title" class="form-input" value="${data.title.replace(/"/g, '&quot;')}">
             </div>
+            ${sourcesHtml}
             <div class="form-group">
                 <label class="form-label">Contenu</label>
                 <div id="edit-editor-wrapper" class="editor-wrapper">
@@ -985,7 +1767,30 @@ function showArticleModal(cardEl, data, autoEdit = false) {
         });
 
         // Save
-        editForm.querySelector("#edit-save").addEventListener("click", async () => {
+        const editSaveBtn = editForm.querySelector("#edit-save");
+        const editAddSourceBtn = editForm.querySelector("#edit-add-source-btn");
+
+        if (editAddSourceBtn) {
+            editAddSourceBtn.onclick = () => {
+                const container = editForm.querySelector("#edit-sources-container");
+                const row = document.createElement('div');
+                row.className = 'source-row';
+                row.innerHTML = `
+                    <input type="text" class="form-input source-name" placeholder="${TRANSLATIONS[currentLang].placeholderSourceName}" value="">
+                    <input type="url" class="form-input source-url" placeholder="${TRANSLATIONS[currentLang].placeholderSourceUrl}" value="">
+                    <button type="button" class="btn-remove-source">✕</button>
+                `;
+                row.querySelector('.btn-remove-source').onclick = () => row.remove();
+                container.appendChild(row);
+            };
+            
+            // Init remove buttons for existing sources
+            editForm.querySelectorAll('.btn-remove-source').forEach(btn => {
+                btn.onclick = () => btn.closest('.source-row').remove();
+            });
+        }
+
+        editSaveBtn.addEventListener("click", async () => {
             const editTitleEl = editForm.querySelector("#edit-title");
             const newTitle = editTitleEl.value.trim();
             const newText = editQuill.root.innerHTML;
@@ -1034,6 +1839,15 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                 editForm.querySelector("#edit-extra-3").value.trim()
             ].filter(Boolean);
 
+            const newSources = [];
+            editForm.querySelectorAll('.source-row').forEach(row => {
+                const name = row.querySelector('.source-name').value.trim();
+                const url = row.querySelector('.source-url').value.trim();
+                if (name || url) {
+                    newSources.push({ name: name || url, url });
+                }
+            });
+
             if (!newTitle) {
                 showToast("Le titre est obligatoire", "error");
                 return;
@@ -1052,7 +1866,9 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                         titre: finalTitle,
                         contenu: finalContent,
                         main: newMain,
-                        extras: newExtras
+                        main: newMain,
+                        extras: newExtras,
+                        sources: newSources
                     });
                 } else if (localId) {
                     // Update local storage
@@ -1063,6 +1879,7 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                         arr[idx].contenu = finalContent;
                         arr[idx].main = newMain;
                         arr[idx].extras = newExtras;
+                        arr[idx].sources = newSources;
                         saveLocalArticles(arr);
                     }
                 }
@@ -1072,6 +1889,7 @@ function showArticleModal(cardEl, data, autoEdit = false) {
                 data.text = finalContent;
                 data.main = newMain;
                 data.extras = newExtras;
+                data.sources = newSources;
 
                 // Update Card UI
                 if (cardEl) {
@@ -1118,7 +1936,7 @@ function showArticleModal(cardEl, data, autoEdit = false) {
 
     deleteBtn.addEventListener("click", async (ev) => {
         ev.stopPropagation();
-        if (!confirm("Supprimer cet article définitivement ?")) return;
+        if (!(await showConfirmModal(currentLang === 'fr' ? "Supprimer cet article définitivement ?" : "Delete this article permanently?"))) return;
 
         deleteBtn.disabled = true;
         deleteBtn.innerHTML = '<span class="btn-spinner"></span> Suppression...';
@@ -1244,6 +2062,7 @@ async function showAdminPanel() {
         <div class="admin-tabs">
             <button class="admin-tab active" id="tab-articles">${currentLang === 'fr' ? 'Articles' : 'Articles'}</button>
             <button class="admin-tab" id="tab-banned">${currentLang === 'fr' ? 'Mots Interdits' : 'Banned Words'}</button>
+            <button class="admin-tab" id="tab-arxiv">${currentLang === 'fr' ? 'Bibliothèque ArXiv' : 'ArXiv Library'}</button>
         </div>
         <div class="admin-content" id="admin-main-content">
             <div class="btn-spinner" style="margin: 40px auto; display: block;"></div>
@@ -1256,6 +2075,7 @@ async function showAdminPanel() {
     const contentArea = overlay.querySelector("#admin-main-content");
     const tabArticles = overlay.querySelector("#tab-articles");
     const tabBanned = overlay.querySelector("#tab-banned");
+    const tabArxiv = overlay.querySelector("#tab-arxiv");
 
     const closeAdmin = () => {
         overlay.remove();
@@ -1263,35 +2083,189 @@ async function showAdminPanel() {
     };
     overlay.querySelector("#admin-close").onclick = closeAdmin;
 
+    tabArticles.onclick = () => renderArticles();
+    tabBanned.onclick = () => renderBannedWords();
+    tabArxiv.onclick = () => renderArxivLibrary(0);
+
+    const LIB_CACHE = new Map(); // Simple session cache for pagination
+    let currentArxivSort = "descending";
+    let currentArxivSearch = "";
+    let arxivSearchTimeout = null;
+
+    async function renderArxivLibrary(offset = 0) {
+        tabArticles.classList.remove("active");
+        tabBanned.classList.remove("active");
+        tabArxiv.classList.add("active");
+
+        contentArea.innerHTML = `
+            <div class="admin-filters" style="display: flex; flex-direction: column; gap: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 4px;">
+                            ${currentLang === 'fr' ? 'Bibliothèque ArXiv' : 'ArXiv Library'}
+                        </div>
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">
+                            ${currentLang === 'fr' ? 'Parcourez et planifiez pour demain' : 'Browse and schedule for tomorrow'}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.8rem; opacity: 0.6;">${currentLang === 'fr' ? 'Tri :' : 'Sort :'}</span>
+                        <select class="admin-select" id="arxiv-sort-select">
+                            <option value="descending" ${currentArxivSort === 'descending' ? 'selected' : ''}>${currentLang === 'fr' ? 'Plus récents' : 'Newest'}</option>
+                            <option value="ascending" ${currentArxivSort === 'ascending' ? 'selected' : ''}>${currentLang === 'fr' ? 'Plus anciens' : 'Oldest'}</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="admin-search-container" style="margin-bottom: 0;">
+                    <input type="text" id="arxiv-search-input" class="admin-search-input" placeholder="${currentLang === 'fr' ? 'Rechercher un titre sur ArXiv...' : 'Search title on ArXiv...'}" value="${currentArxivSearch}">
+                </div>
+            </div>
+            <div class="admin-list" id="admin-arxiv-list">
+                <div class="btn-spinner" style="margin: 40px auto; display: block;"></div>
+            </div>
+            <div class="admin-pagination" id="arxiv-pagination" style="display: none;">
+                <button class="btn btn-ghost btn-sm" id="prev-arxiv" ${offset === 0 ? 'disabled' : ''}>${currentLang === 'fr' ? ' Précédent' : ' Previous'}</button>
+                <span class="page-info">${currentLang === 'fr' ? 'Page' : 'Page'} ${Math.floor(offset / 20) + 1}</span>
+                <button class="btn btn-ghost btn-sm" id="next-arxiv">${currentLang === 'fr' ? 'Suivant ' : 'Next '}</button>
+            </div>
+        `;
+
+        const list = contentArea.querySelector("#admin-arxiv-list");
+        const pagination = contentArea.querySelector("#arxiv-pagination");
+        const sortSelect = contentArea.querySelector("#arxiv-sort-select");
+        const searchInput = contentArea.querySelector("#arxiv-search-input");
+
+        sortSelect.onchange = (e) => {
+            currentArxivSort = e.target.value;
+            renderArxivLibrary(0); // Reset to page 1 on sort change
+        };
+
+        searchInput.oninput = (e) => {
+            clearTimeout(arxivSearchTimeout);
+            arxivSearchTimeout = setTimeout(() => {
+                currentArxivSearch = e.target.value.trim();
+                renderArxivLibrary(0); // Reset to page 1 on search
+            }, 600); // 600ms debounce
+        };
+
+        try {
+            let allArticles = null;
+            const safeSearch = encodeURIComponent(currentArxivSearch.replace(/"/g, ''));
+            const queryPart = currentArxivSearch ? `+AND+ti:%22${safeSearch}%22` : "";
+            const cacheKey = `${currentArxivSort}_search_${safeSearch}_p_${offset}`;
+            const cached = LIB_CACHE.get(cacheKey);
+            
+            // Cache valid for 10 minutes
+            if (cached && (Date.now() - cached.time < 10 * 60 * 1000)) {
+                allArticles = cached.data;
+            } else {
+                const paginatedRawUrl = `https://export.arxiv.org/api/query?search_query=cat:astro-ph${queryPart}&sortBy=submittedDate&sortOrder=${currentArxivSort}&start=${offset}&max_results=20`;
+                const xmlText = await fetchViaProxy(paginatedRawUrl);
+                if (xmlText) {
+                    allArticles = parseArxivXml(xmlText);
+                    LIB_CACHE.set(cacheKey, { data: allArticles, time: Date.now() });
+                }
+            }
+
+            if (!allArticles || allArticles.length === 0) {
+                list.innerHTML = `<div style="color: #ff4d4d; text-align: center; padding: 20px;">${currentLang === 'fr' ? 'Aucun article trouvé. Essayez un autre filtre.' : 'No articles found. Try another filter.'}</div>`;
+                return;
+            }
+
+            // Check scheduled
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+            const q = query(collection(db, "ArXivPicks"), where("scheduledFor", "==", tomorrowStr), limit(1));
+            const pickSnap = await getDocs(q);
+            const scheduledId = pickSnap.empty ? null : pickSnap.docs[0].data().id;
+
+            list.innerHTML = "";
+            allArticles.forEach(entry => {
+                const item = document.createElement("div");
+                item.className = "admin-item";
+                
+                const isScheduled = (entry.id === scheduledId);
+                const authorsStr = entry.authors?.slice(0, 2).join(", ") + (entry.authors?.length > 2 ? " et al." : "");
+                const pubDate = formatDate(entry.published);
+
+                item.innerHTML = `
+                    <div class="admin-item-info" style="flex: 1;">
+                        <div class="admin-item-title" style="margin-bottom: 2px;">${entry.title}</div>
+                        <div class="admin-item-meta">${authorsStr} • <span style="opacity: 0.8;">${pubDate}</span></div>
+                    </div>
+                    <div class="admin-item-actions">
+                        ${isScheduled ? `<span class="scheduled-badge">DÉJÀ CHOISI</span>` : ""}
+                        <button class="btn-select-next" ${isScheduled ? 'disabled' : ''}>
+                            ${currentLang === 'fr' ? 'Choisir pour demain' : 'Select for tomorrow'}
+                        </button>
+                    </div>
+                `;
+
+                const selectBtn = item.querySelector(".btn-select-next");
+                selectBtn.onclick = async () => {
+                    selectBtn.disabled = true;
+                    selectBtn.innerHTML = '<span class="btn-spinner"></span>';
+                    try {
+                        const existingPicks = await getDocs(q);
+                        for (const d of existingPicks.docs) await deleteDoc(doc(db, "ArXivPicks", d.id));
+                        await addDoc(collection(db, "ArXivPicks"), { ...entry, scheduledFor: tomorrowStr, createdAt: serverTimestamp() });
+                        showToast(TRANSLATIONS[currentLang].toastArxivSelected || "Sélectionné !", "success");
+                        renderArxivLibrary(offset);
+                    } catch (err) {
+                        showToast("Erreur", "error");
+                        renderArxivLibrary(offset);
+                    }
+                };
+                list.appendChild(item);
+            });
+
+            // Setup pagination buttons
+            pagination.style.display = "flex";
+            pagination.querySelector("#prev-arxiv").onclick = () => renderArxivLibrary(Math.max(0, offset - 20));
+            pagination.querySelector("#next-arxiv").onclick = () => renderArxivLibrary(offset + 20);
+
+            // Background prefetch next page for instant navigation
+            const safeSearch2 = encodeURIComponent(currentArxivSearch.replace(/"/g, ''));
+            const queryPart2 = currentArxivSearch ? `+AND+ti:%22${safeSearch2}%22` : "";
+            const nextCacheKey = `${currentArxivSort}_search_${safeSearch2}_p_${offset + 20}`;
+            
+            if (!LIB_CACHE.has(nextCacheKey)) {
+                const nextUrl = `https://export.arxiv.org/api/query?search_query=cat:astro-ph${queryPart2}&sortBy=submittedDate&sortOrder=${currentArxivSort}&start=${offset + 20}&max_results=20`;
+                fetchViaProxy(nextUrl).then(xml => {
+                    if (xml) LIB_CACHE.set(nextCacheKey, { data: parseArxivXml(xml), time: Date.now() });
+                }).catch(() => {});
+            }
+
+        } catch (err) {
+            list.innerHTML = `<div style="color: #ff4d4d; text-align: center; padding: 20px;">Erreur lors du chargement.</div>`;
+        }
+    }
+
     async function renderArticles() {
         tabArticles.classList.add("active");
         tabBanned.classList.remove("active");
         contentArea.innerHTML = `
-            <div style="background: rgba(255, 159, 67, 0.1); border: 1px solid rgba(255, 159, 67, 0.2); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; color: #ff9f43; display: flex; align-items: start; gap: 12px;">
-                <span style="font-size: 1.2rem; transform: translateY(-2px);">💡</span>
-                <div>
-                    <strong style="display: block; margin-bottom: 4px;">Astuce d'administrateur :</strong>
-                    ${currentLang === 'fr' 
-                        ? 'Pour contourner le filtre de mots interdits, entourez le mot de dièses. Exemple: <code>#mot#</code>.' 
-                        : 'To bypass the profanity filter, wrap the word in hashes. Example: <code>#word#</code>.'}
-                </div>
-            </div>
             <div class="admin-list" id="admin-article-list">
                 <div class="btn-spinner"></div>
             </div>
         `;
         const list = contentArea.querySelector("#admin-article-list");
+
         try {
             const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
             const snapshot = await getDocs(q);
             list.innerHTML = "";
-            if (snapshot.empty) {
+            adminArticlesList = snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+
+            if (adminArticlesList.length === 0) {
                 list.innerHTML = `<div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.3);">${currentLang === 'fr' ? 'Aucun article trouvé.' : 'No articles found.'}</div>`;
                 return;
             }
-            snapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                const id = docSnap.id;
+
+            adminArticlesList.forEach(articleObj => {
+                const { data, id } = articleObj;
                 const item = document.createElement("div");
                 item.className = "admin-item" + (data.type === 'note' ? ' admin-note' : '');
                 
@@ -1304,8 +2278,8 @@ async function showAdminPanel() {
                         <div class="admin-item-meta">${formatDate(createdAt)} | Lang: ${(data.lang || 'fr').toUpperCase()}</div>
                     </div>
                     <div class="admin-item-actions">
-                        <button class="btn btn-edit btn-sm" data-id="${id}">${t.btnModifier || 'Modifier'}</button>
-                        <button class="btn btn-danger btn-sm" data-id="${id}">${t.btnSupprimer || 'Supprimer'}</button>
+                        <button class="btn btn-edit btn-sm" data-id="${id}">${TRANSLATIONS[currentLang].btnModifier || 'Modifier'}</button>
+                        <button class="btn btn-danger btn-sm" data-id="${id}">${TRANSLATIONS[currentLang].btnSupprimer || 'Supprimer'}</button>
                     </div>
                 `;
 
@@ -1324,11 +2298,12 @@ async function showAdminPanel() {
                 };
 
                 item.querySelector(".btn-danger").onclick = async () => {
-                    if (confirm(currentLang === 'fr' ? "Supprimer définitivement cet élément ?" : "Delete this item permanently?")) {
+                    if (await showConfirmModal(currentLang === 'fr' ? "Supprimer définitivement cet élément ?" : "Delete this item permanently?")) {
                         try {
                             await deleteDoc(doc(db, "Article", id));
+                            adminArticlesList = adminArticlesList.filter(a => a.id !== id);
                             item.remove();
-                            showToast(t.toastSupprime || "Supprimé", "success");
+                            showToast(TRANSLATIONS[currentLang].toastSupprime || "Supprimé", "success");
                             loadArticles(); 
                         } catch (e) {
                             showToast("Error", "error");
@@ -1406,6 +2381,7 @@ async function showAdminPanel() {
 
             if (isCustom) {
                 item.querySelector(".btn-delete").onclick = async () => {
+                    if (!(await showConfirmModal(currentLang === 'fr' ? `Supprimer "${word}" définitivement ?` : `Delete "${word}" permanently?`))) return;
                     await deleteCustomBannedWord(word);
                     item.remove();
                     showToast(`"${word}" supprimé`, "info");
@@ -1471,97 +2447,96 @@ async function loadArticles() {
     const loading = document.getElementById("articles-loading");
     if (!container) return;
 
-    container.innerHTML = "";
     if (loading) loading.classList.remove("hidden");
     try {
-        // Fetch ALL articles (no where clause to avoid index issues with missing 'lang' field)
         const q = query(collection(db, "Article"), orderBy("createdAt", "desc"));
         const snapshot = await getDocs(q);
 
         if (loading) loading.classList.add("hidden");
 
-        if (snapshot.empty) {
-            // Fallback to local storage
-            const local = loadLocalArticles();
-            if (local.length > 0) {
-                local.forEach((a) => {
-                    const node = buildArticleCard({
-                        title: a.titre || a.title || "",
-                        text: a.contenu || a.content || "",
-                        main: a.main || null,
-                        extras: a.extras || [],
-                        date: a.createdAt || null,
-                        lang: a.lang || "fr",
-                        type: a.type || "article"
-                    });
-                    if (a._localId) node.dataset.localId = a._localId;
-                    container.appendChild(node);
-                });
-            }
-            updateEmptyState();
-            return;
-        }
-
+        const articles = [];
         snapshot.forEach((d) => {
             const data = d.data();
-            const createdAt = data.createdAt?.toDate?.() || null;
-            const articleLang = data.lang || null;
-
-            // Visibility Logic: 
-            // 1. Show if lang matches currentLang
-            // 2. Show if it's a legacy article (no lang field) - as requested by user
-            if (!articleLang || articleLang === currentLang) {
-                const node = buildArticleCard(
-                    {
-                        title: data.titre || data.title || "",
-                        text: data.contenu || data.content || "",
-                        main: data.main || null,
-                        extras: data.extras || [],
-                        date: createdAt,
-                        lang: articleLang || "fr",
-                        type: data.type || "article"
-                    },
-                    d.id
-                );
-                container.appendChild(node);
-            }
+            articles.push({ id: d.id, ...data });
         });
 
-        updateEmptyState();
+        allLoadedArticles = articles;
+        applyPublicSearch();
+
+        // One-time setup for search listener if not already done
+        const searchInput = document.getElementById("public-search");
+        if (searchInput && !searchInput.dataset.initialized) {
+            searchInput.oninput = () => applyPublicSearch();
+            searchInput.dataset.initialized = "true";
+        }
+
         console.log("✅ Articles chargés depuis Firebase");
     } catch (err) {
         console.warn("Erreur Firebase, fallback localStorage", err);
-        // ... local storage fallback already handled by snapshot.empty check above if needed, 
-        // but let's keep a catch fallback for total failure.
         if (loading) loading.classList.add("hidden");
         const local = loadLocalArticles();
-        local.forEach((a) => {
-            const node = buildArticleCard({
-                title: a.titre || a.title || "",
-                text: a.contenu || a.content || "",
-                main: a.main || null,
-                extras: a.extras || [],
-                date: a.createdAt || null,
-                lang: a.lang || "fr",
-                type: a.type || "article"
-            });
-            if (a._localId) node.dataset.localId = a._localId;
-            container.appendChild(node);
-        });
-        updateEmptyState();
+        allLoadedArticles = local;
+        applyPublicSearch();
     }
+}
+
+function applyPublicSearch() {
+    const container = document.getElementById("articles-container");
+    const queryStr = document.getElementById("public-search")?.value.toLowerCase().trim() || "";
+    if (!container) return;
+
+    container.innerHTML = "";
+    
+    const filtered = allLoadedArticles.filter(a => {
+        const title = (a.titre || a.title || "").toLowerCase();
+        const articleLang = a.lang || null;
+        // Search match AND Visibility Logic (language)
+        const matchesSearch = title.includes(queryStr);
+        const matchesLang = !articleLang || articleLang === currentLang;
+        return matchesSearch && matchesLang;
+    });
+
+    if (filtered.length === 0) {
+        updateEmptyState(); // Will show empty state if nothing matches
+        return;
+    }
+
+    filtered.forEach((data) => {
+        const createdAt = data.createdAt?.toDate?.() || data.createdAt || null;
+        const node = buildArticleCard(
+            {
+                title: data.titre || data.title || "",
+                text: data.contenu || data.content || "",
+                main: data.main || null,
+                extras: data.extras || [],
+                date: createdAt,
+                lang: data.lang || "fr",
+                type: data.type || "article",
+                authorPseudo: data.authorPseudo || null,
+                sources: data.sources || []
+            },
+            data.id
+        );
+        if (data._localId) node.dataset.localId = data._localId;
+        container.appendChild(node);
+    });
+
+    updateEmptyState();
 }
 
 // ---------- Publish Article ----------
 async function publishArticle() {
     const titleEl = document.getElementById("title");
+    const authorEl = document.getElementById("author-name");
     const contentEl = document.getElementById("content");
     const mainImageEl = document.getElementById("main-image");
     const publishBtn = document.getElementById("publish-button");
 
     const title = titleEl?.value.trim() || "";
+    const author = authorEl?.value.trim() || null;
     const text = quill ? quill.root.innerHTML : "";
-    const mainImage = mainImageEl?.value.trim() || null;
+    let mainImage = document.getElementById("main-image")?.value.trim() || null;
+    let mainVideo = null;
 
     if (!title) {
         showToast(currentLang === 'fr' ? "Veuillez ajouter un titre." : "Please add a title.", "error");
@@ -1610,106 +2585,157 @@ async function publishArticle() {
         if (val) extras.push(val);
     }
 
+    const sources = getSourcesData();
+
     // Loading state on button
     const originalHTML = publishBtn.innerHTML;
     publishBtn.disabled = true;
-    publishBtn.innerHTML = '<span class="btn-spinner"></span> Publication...';
-
-    const container = document.getElementById("articles-container");
-    let node;
+    publishBtn.innerHTML = '<span class="btn-spinner"></span> Envoi...';
 
     try {
-        const docRef = await addDoc(collection(db, "Article"), {
-            titre: finalTitle,
-            contenu: finalContent,
-            main: currentType === 'note' ? null : mainImage,
-            extras: currentType === 'note' ? [] : extras,
-            type: currentType,
-            lang: currentLang,
-            createdAt: serverTimestamp(),
-        });
+        // Handle Media Upload
+        if (selectedMediaFile) {
+            try {
+                const uploadedUrl = await uploadMedia(selectedMediaFile);
+                if (selectedMediaFile.type.startsWith('video/')) {
+                    mainVideo = uploadedUrl;
+                    mainImage = videoThumbnail;
+                } else {
+                    mainImage = uploadedUrl;
+                }
+            } catch (err) {
+                console.error("Upload error:", err);
+                showToast("Erreur lors de l'envoi du média", "error");
+                return; // Will hit finally
+            }
+        }
 
-        node = buildArticleCard(
-            { title: finalTitle, text: finalContent, main: currentType === 'note' ? null : mainImage, extras: currentType === 'note' ? [] : extras, date: new Date(), type: currentType },
-            docRef.id
-        );
+        const container = document.getElementById("articles-container");
+        let node;
 
-        showToast(currentType === 'note' 
-            ? (currentLang === 'fr' ? 'Note publiée !' : 'Note published!') 
-            : (currentLang === 'fr' ? 'Article publié avec succès !' : 'Article published!'), "success");
+        try {
+            const docRef = await addDoc(collection(db, "Article"), {
+                titre: finalTitle,
+                contenu: finalContent,
+                main: mainImage,
+                video: mainVideo,
+                extras: currentType === 'note' ? [] : extras,
+                type: currentType,
+                lang: currentLang,
+                author: author,
+                sources: sources,
+                createdAt: serverTimestamp(),
+            });
+
+            node = buildArticleCard(
+                { 
+                    title: finalTitle, 
+                    text: finalContent, 
+                    main: mainImage, 
+                    video: mainVideo,
+                    author: author,
+                    sources: sources,
+                    extras: currentType === 'note' ? [] : extras, 
+                    date: new Date(), 
+                    type: currentType 
+                },
+                docRef.id
+            );
+
+            showToast(currentType === 'note' 
+                ? (currentLang === 'fr' ? 'Note publiée !' : 'Note published!') 
+                : (currentLang === 'fr' ? 'Article publié avec succès !' : 'Article published!'), "success");
+        } catch (err) {
+            console.warn("Échec Firestore, sauvegarde locale", err);
+
+            const localId = `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            node = buildArticleCard({ 
+                title: finalTitle, 
+                text: finalContent, 
+                main: mainImage, 
+                extras: currentType === 'note' ? [] : extras, 
+                date: new Date(),
+                authorPseudo: author,
+                sources: sources
+            });
+            node.dataset.localId = localId;
+
+            addLocalArticle({
+                _localId: localId,
+                titre: finalTitle,
+                contenu: finalContent,
+                main: mainImage,
+                extras: extras,
+                authorPseudo: author,
+                sources: sources,
+                createdAt: new Date().toISOString(),
+            });
+
+            showToast("Article sauvegardé localement", "info");
+        }
+
+        // Insert the article at the top
+        if (container && node) {
+            container.prepend(node);
+            updateEmptyState();
+        }
+
+        // Reset form inputs only on SUCCESS
+        if (titleEl) titleEl.value = "";
+        if (quill) quill.setContents([]);
+        if (mainImageEl) mainImageEl.value = "";
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById(`additional-image-${i}`);
+            if (el) el.value = "";
+        }
+        const preview = document.getElementById("main-image-preview");
+        if (preview) {
+            preview.innerHTML = "";
+            preview.classList.add("hidden");
+        }
+        const sourcesContainer = document.getElementById("sources-container");
+        if (sourcesContainer) sourcesContainer.innerHTML = "";
+        if (typeof clearMediaFile === 'function') clearMediaFile();
+
+        // Scroll to the newly published article
+        if (node) {
+            node.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
     } catch (err) {
-        console.warn("Échec Firestore, sauvegarde locale", err);
-
-        const localId = `local_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-        node = buildArticleCard({ title, text, main: mainImage, extras, date: new Date() });
-        node.dataset.localId = localId;
-
-        addLocalArticle({
-            _localId: localId,
-            titre: title,
-            contenu: text,
-            main: mainImage,
-            extras: extras,
-            createdAt: new Date().toISOString(),
-        });
-
-        showToast("Article sauvegardé localement", "info");
-    }
-
-    // Insert the article at the top
-    if (container && node) {
-        container.prepend(node);
-        updateEmptyState();
-    }
-
-    // Reset form
-    publishBtn.disabled = false;
-    publishBtn.innerHTML = originalHTML;
-
-    if (titleEl) titleEl.value = "";
-    if (quill) quill.setContents([]);
-    if (mainImageEl) mainImageEl.value = "";
-    for (let i = 1; i <= 3; i++) {
-        const el = document.getElementById(`additional-image-${i}`);
-        if (el) el.value = "";
-    }
-
-    const preview = document.getElementById("main-image-preview");
-    if (preview) {
-        preview.innerHTML = "";
-        preview.classList.add("hidden");
-    }
-
-    // Scroll to the newly published article
-    if (node) {
-        node.scrollIntoView({ behavior: "smooth", block: "center" });
+        console.error("Publication error:", err);
+        showToast("Erreur lors de la publication", "error");
+    } finally {
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = originalHTML;
     }
 }
 
 // ---------- Clear Form ----------
-function clearForm() {
-    if (!confirm("Effacer tous les champs ?")) return;
+async function clearForm() {
+    if (!(await showConfirmModal(TRANSLATIONS[currentLang].confirmClear))) return;
 
-    const fields = ["title", "main-image", "additional-image-1", "additional-image-2", "additional-image-3"];
+    const fields = ["title", "author-name", "main-image", "additional-image-1", "additional-image-2", "additional-image-3"];
     fields.forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = "";
     });
     if (quill) quill.setContents([]);
 
-    const preview = document.getElementById("main-image-preview");
-    if (preview) {
-        preview.innerHTML = "";
-        preview.classList.add("hidden");
-    }
+    if (typeof clearMediaFile === 'function') clearMediaFile();
 
-    showToast("Formulaire effacé", "info");
+    const sourcesContainer = document.getElementById("sources-container");
+    if (sourcesContainer) sourcesContainer.innerHTML = "";
+
+    showToast(TRANSLATIONS[currentLang].toastEfface || "Formulaire effacé", "info");
 }
 
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", async () => {
     initQuill();
     initTypeToggle();
+    initMediaDropzone();
+    initSourcesManager();
     initNavbar();
     initImagePreview();
     translateUI();
@@ -1746,4 +2772,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await loadCustomBannedWords();
     await loadArticles();
+    loadDailyArxiv();
 });
