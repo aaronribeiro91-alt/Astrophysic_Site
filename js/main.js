@@ -56,8 +56,6 @@ const storage = getStorage(app);
 
 // ---------- Media & State ----------
 let selectedMediaFile = null;
-let videoThumbnail = null;
-let mediaType = 'image'; // 'image' or 'video'
 
 // ---------- Search State ----------
 let allLoadedArticles = []; // Stores public articles for search
@@ -341,25 +339,6 @@ function handleMediaFile(file) {
             addRemoveButton(previewContainer);
         };
         reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
-        mediaType = 'video';
-        if (extraImagesGroup) extraImagesGroup.classList.remove('hidden');
-        generateVideoThumbnail(file).then(thumb => {
-            videoThumbnail = thumb;
-            const video = document.createElement('video');
-            video.src = URL.createObjectURL(file);
-            video.muted = true;
-            video.autoplay = true;
-            video.loop = true;
-            previewContainer.appendChild(video);
-            
-            const indicator = document.createElement('div');
-            indicator.className = 'video-indicator';
-            indicator.innerHTML = '<span>📹</span> Vidéo détectée';
-            previewContainer.appendChild(indicator);
-            
-            addRemoveButton(previewContainer);
-        });
     }
 }
 
@@ -376,8 +355,6 @@ function addRemoveButton(container) {
 
 function clearMediaFile() {
     selectedMediaFile = null;
-    videoThumbnail = null;
-    mediaType = 'image';
     const previewContainer = document.getElementById('media-preview-container');
     const dropzoneContent = document.querySelector('.dropzone-content');
     const fileInput = document.getElementById('media-file-input');
@@ -390,33 +367,6 @@ function clearMediaFile() {
     if (extraImagesGroup) extraImagesGroup.classList.add('hidden');
     if (dropzoneContent) dropzoneContent.style.opacity = '1';
     if (fileInput) fileInput.value = '';
-}
-
-function generateVideoThumbnail(file) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        video.src = URL.createObjectURL(file);
-        video.preload = 'metadata';
-        video.muted = true;
-        video.playsInline = true;
-        
-        video.onloadedmetadata = () => {
-            video.currentTime = 1; 
-        };
-        
-        video.onseeked = () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
-            URL.revokeObjectURL(video.src);
-        };
-        
-        video.onerror = () => resolve(null);
-    });
 }
 
 // ---------- Sources Manager ----------
@@ -492,14 +442,15 @@ function showSourcesPopup(sources) {
 }
 
 // ---------- ArXiv Actualités (Daily Feed) ----------
-const ARXIV_CACHE_KEY = "cosmos_arxiv_cache_v3";
-const NASA_CACHE_KEY = "cosmos_nasa_cache_v3";
+const ARXIV_CACHE_KEY = "cosmos_arxiv_cache_v5";
+const NASA_CACHE_KEY = "cosmos_nasa_cache_v5";
+const NEWS_CACHE_DURATION = 3600000; // 1 hour in ms
 
 // Proxy list for CORS bypass (fallback chain)
 const CORS_PROXIES = [
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`
 ];
 
 async function fetchViaProxy(url) {
@@ -507,7 +458,7 @@ async function fetchViaProxy(url) {
         try {
             const proxyUrl = makeProxy(url);
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+            const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
             const res = await fetch(proxyUrl, { signal: controller.signal });
             clearTimeout(timeout);
             if (!res.ok) continue;
@@ -562,7 +513,10 @@ async function fetchLatestNasaArticle() {
     // Check cache first
     try {
         const cache = JSON.parse(localStorage.getItem(NASA_CACHE_KEY));
-        if (cache && cache.date === getTodayStr() && cache.article) return cache.article;
+        const now = Date.now();
+        if (cache && cache.timestamp && (now - cache.timestamp < NEWS_CACHE_DURATION) && cache.article) {
+            return cache.article;
+        }
     } catch (_) {}
 
     const html = await fetchViaProxy("https://www.nasa.gov/news/recently-published/");
@@ -598,7 +552,10 @@ async function fetchLatestNasaArticle() {
         }
 
         if (nasaArticle) {
-            localStorage.setItem(NASA_CACHE_KEY, JSON.stringify({ date: getTodayStr(), article: nasaArticle }));
+            localStorage.setItem(NASA_CACHE_KEY, JSON.stringify({ 
+                timestamp: Date.now(), 
+                article: nasaArticle 
+            }));
         }
         return nasaArticle;
     } catch (err) {
@@ -616,7 +573,8 @@ async function loadDailyArxiv() {
     let finalArticles = null;
     try {
         const cache = JSON.parse(localStorage.getItem(ARXIV_CACHE_KEY));
-        if (cache && cache.date === getTodayStr() && cache.articles?.length >= 2) {
+        const now = Date.now();
+        if (cache && cache.timestamp && (now - cache.timestamp < NEWS_CACHE_DURATION) && cache.articles?.length >= 2) {
             finalArticles = cache.articles;
         }
     } catch (_) {}
@@ -657,7 +615,7 @@ async function loadDailyArxiv() {
             }
 
             localStorage.setItem(ARXIV_CACHE_KEY, JSON.stringify({
-                date: todayStr,
+                timestamp: Date.now(),
                 articles: finalArticles
             }));
         }
@@ -1439,13 +1397,6 @@ function buildArticleCard(data, firestoreId) {
         };
         wrapper.appendChild(img);
         
-        if (data.video) {
-            const playTag = document.createElement("div");
-            playTag.className = "video-badge";
-            playTag.innerHTML = "<span>▶</span> VIDÉO";
-            wrapper.appendChild(playTag);
-        }
-        
         card.appendChild(wrapper);
     } else {
         const emojis = isNote 
@@ -1549,18 +1500,8 @@ function showArticleModal(cardEl, data, autoEdit = false) {
         modal.appendChild(signature);
     }
 
-    // Main media (Video takes priority)
-    if (data.video) {
-        const video = document.createElement("video");
-        video.className = "modal-video";
-        video.src = data.video;
-        video.controls = true;
-        video.poster = data.main;
-        video.style.width = "100%";
-        video.style.borderRadius = "12px";
-        video.style.marginBottom = "20px";
-        modal.appendChild(video);
-    } else if (data.main) {
+    // Main media
+    if (data.main) {
         const img = document.createElement("img");
         img.className = "modal-image";
         img.src = data.main;
@@ -2536,7 +2477,6 @@ async function publishArticle() {
     const author = authorEl?.value.trim() || null;
     const text = quill ? quill.root.innerHTML : "";
     let mainImage = document.getElementById("main-image")?.value.trim() || null;
-    let mainVideo = null;
 
     if (!title) {
         showToast(currentLang === 'fr' ? "Veuillez ajouter un titre." : "Please add a title.", "error");
@@ -2596,13 +2536,7 @@ async function publishArticle() {
         // Handle Media Upload
         if (selectedMediaFile) {
             try {
-                const uploadedUrl = await uploadMedia(selectedMediaFile);
-                if (selectedMediaFile.type.startsWith('video/')) {
-                    mainVideo = uploadedUrl;
-                    mainImage = videoThumbnail;
-                } else {
-                    mainImage = uploadedUrl;
-                }
+                mainImage = await uploadMedia(selectedMediaFile);
             } catch (err) {
                 console.error("Upload error:", err);
                 showToast("Erreur lors de l'envoi du média", "error");
@@ -2618,7 +2552,6 @@ async function publishArticle() {
                 titre: finalTitle,
                 contenu: finalContent,
                 main: mainImage,
-                video: mainVideo,
                 extras: currentType === 'note' ? [] : extras,
                 type: currentType,
                 lang: currentLang,
@@ -2632,7 +2565,6 @@ async function publishArticle() {
                     title: finalTitle, 
                     text: finalContent, 
                     main: mainImage, 
-                    video: mainVideo,
                     author: author,
                     sources: sources,
                     extras: currentType === 'note' ? [] : extras, 

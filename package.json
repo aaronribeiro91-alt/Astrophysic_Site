@@ -26,6 +26,7 @@
   "homepage": "https://aaronribeiro91-alt.github.io/Astrophysic_Site/",
   "dependencies": {
     "firebase": "^12.11.0",
+    "jsdom": "^29.0.1",
     "profanities": "^3.0.1"
   },
   "devDependencies": {

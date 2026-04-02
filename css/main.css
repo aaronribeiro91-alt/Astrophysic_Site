@@ -1437,6 +1437,33 @@ body {
 /* ---------- Note Card (Orange Theme) ---------- */
 .article-card.note-card {
     border: 1px solid rgba(255, 159, 67, 0.3);
+    border-radius: 50%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 30px;
+    overflow: hidden;
+}
+
+.article-card.note-card .card-image-wrapper,
+.article-card.note-card .card-placeholder {
+    height: 100px;
+    width: 100px;
+    min-height: auto;
+    border-radius: 50%;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+
+.article-card.note-card .card-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .article-card.note-card:hover {
