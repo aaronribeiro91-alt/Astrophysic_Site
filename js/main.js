@@ -66,6 +66,8 @@ const TRANSLATIONS = {
     fr: {
         navCreate: "Créer",
         navActualites: "Actualités",
+        navLaunches: "Lancements",
+        navSkyMap: "Carte du Ciel",
         navArticles: "Articles",
         heroBadge: "🔭 Explorez l'infini",
         heroTitle1: "Partagez vos découvertes",
@@ -117,6 +119,8 @@ const TRANSLATIONS = {
     en: {
         navCreate: "Create",
         navActualites: "News",
+        navLaunches: "Launches",
+        navSkyMap: "Sky Map",
         navArticles: "Articles",
         heroBadge: "🔭 Explore the infinity",
         heroTitle1: "Share your cosmic",
@@ -862,6 +866,8 @@ function translateUI() {
     const mappings = {
         '[href="#create"].nav-link': t.navCreate,
         '[href="#actualites"].nav-link': t.navActualites,
+        '[href="#launches"].nav-link': t.navLaunches,
+        '[href="#skymap"].nav-link': t.navSkyMap,
         '[href="#articles"].nav-link': t.navArticles,
         '.hero-badge': t.heroBadge,
         '.hero-subtitle': t.heroSubtitle,
@@ -2662,6 +2668,145 @@ async function clearForm() {
     showToast(TRANSLATIONS[currentLang].toastEfface || "Formulaire effacé", "info");
 }
 
+// ---------- Live Launches Tracker ----------
+async function fetchLaunches() {
+    const container = document.getElementById("launches-container");
+    const loading = document.getElementById("launches-loading");
+    if (!container) return;
+
+    const LAUNCH_CACHE_KEY = "cosmos_launches_cache_v2";
+    let launchData = null;
+
+    try {
+        const cache = JSON.parse(localStorage.getItem(LAUNCH_CACHE_KEY));
+        const now = Date.now();
+        if (cache && cache.timestamp && (now - cache.timestamp < 86400000) && cache.data) {
+            launchData = cache.data;
+        }
+    } catch (_) {}
+
+    try {
+        if (!launchData) {
+            const res = await fetch("https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=3");
+            const data = await res.json();
+            if (data.results) {
+                launchData = data.results;
+                localStorage.setItem(LAUNCH_CACHE_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    data: launchData
+                }));
+            }
+        }
+        
+        if (loading) loading.classList.add("hidden");
+        container.innerHTML = "";
+
+        if (launchData && launchData.length > 0) {
+            launchData.forEach(launch => {
+                const card = document.createElement("div");
+                card.className = "launch-card glass-card";
+                card.style.cursor = "pointer";
+                
+                // Prioritize video live stream, fallback to SpaceLaunchNow page, then Google search
+                let targetUrl = null;
+                if (launch.vid_urls && launch.vid_urls.length > 0) {
+                    targetUrl = launch.vid_urls[0].url;
+                } else if (launch.slug) {
+                    targetUrl = `https://spacelaunchnow.me/launch/${launch.slug}`;
+                } else {
+                    targetUrl = `https://www.google.com/search?q=${encodeURIComponent(launch.name + ' launch')}`;
+                }
+                card.onclick = () => window.open(targetUrl, '_blank');
+                
+                const provider = launch.launch_service_provider ? launch.launch_service_provider.name : "Inconnu";
+                const location = launch.pad ? launch.pad.location.name : "Lieu Inconnu";
+                
+                card.innerHTML = `
+                    <div class="launch-provider">${provider}</div>
+                    <div class="launch-title">${launch.name}</div>
+                    <div class="launch-location">📍 ${location}</div>
+                    <div class="launch-countdown" data-time="${launch.net}">T- --:--:--</div>
+                `;
+                container.appendChild(card);
+            });
+
+            // Start countdown interval
+            setInterval(updateCountdowns, 1000);
+            updateCountdowns(); // initial call
+        }
+    } catch (err) {
+        console.error("Launch API Error:", err);
+        if (loading) loading.classList.add("hidden");
+        container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.5);">Impossible de charger les lancements.</p>`;
+    }
+}
+
+function updateCountdowns() {
+    const els = document.querySelectorAll(".launch-countdown");
+    const now = new Date().getTime();
+    
+    els.forEach(el => {
+        const target = new Date(el.getAttribute("data-time")).getTime();
+        const diff = target - now;
+        
+        if (diff <= 0) {
+            el.innerHTML = "LANCEMENT !";
+            el.style.color = "#ff4b2b";
+            return;
+        }
+        
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        const pad = (n) => n.toString().padStart(2, '0');
+        
+        if (d > 0) {
+            el.innerHTML = `T- ${d}J ${pad(h)}:${pad(m)}:${pad(s)}`;
+        } else {
+            el.innerHTML = `T- ${pad(h)}:${pad(m)}:${pad(s)}`;
+        }
+    });
+}
+
+// ---------- Interactive Sky Map ----------
+function initSkyMap() {
+    const starmap = document.getElementById("starmap");
+    const geoBtn = document.getElementById("geo-request-btn");
+    if (!starmap) return;
+
+    const buildIframe = (lat = 48.8566, lon = 2.3522) => {
+        starmap.innerHTML = `<iframe loading="lazy" width="100%" height="500" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://virtualsky.lco.global/embed/index.html?longitude=${lon}&latitude=${lat}&projection=stereo&constellations=true&constellationlabels=true&meteorshowers=true&showstarlabels=true&live=true&az=180&color=2e2f3d"></iframe>`;
+    };
+
+    // Default to Paris
+    buildIframe();
+
+    if (geoBtn) {
+        geoBtn.addEventListener("click", () => {
+            if (navigator.geolocation) {
+                geoBtn.textContent = "Recherche en cours...";
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        buildIframe(position.coords.latitude, position.coords.longitude);
+                        geoBtn.textContent = "Ciel mis à jour !";
+                        geoBtn.style.color = "#4caf50";
+                        geoBtn.style.pointerEvents = "none";
+                    },
+                    (error) => {
+                        console.error("Geo error:", error);
+                        geoBtn.textContent = "Position refusée.";
+                        geoBtn.style.color = "#ff4b2b";
+                    }
+                );
+            } else {
+                geoBtn.textContent = "GPS non supporté.";
+            }
+        });
+    }
+}
+
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", async () => {
     initQuill();
@@ -2671,6 +2816,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     initNavbar();
     initImagePreview();
     translateUI();
+    
+    // Feature initializations
+    fetchLaunches();
+    initSkyMap();
 
     const publishBtn = document.getElementById("publish-button");
     const clearBtn = document.getElementById("clear-button");
