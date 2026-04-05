@@ -68,6 +68,7 @@ const TRANSLATIONS = {
         navActualites: "Actualités",
         navLaunches: "Lancements",
         navSkyMap: "Carte du Ciel",
+        navISS: "ISS",
         navArticles: "Articles",
         heroBadge: "🔭 Explorez l'infini",
         heroTitle1: "Partagez vos découvertes",
@@ -114,13 +115,32 @@ const TRANSLATIONS = {
         tabArxiv: "ArXiv",
         btnSelectTomorrow: "Choisir pour demain",
         toastArxivSelected: "Article sélectionné pour demain !",
-        arxivLibraryDesc: "Sélectionnez un article pour qu'il soit mis en avant demain."
+        arxivLibraryDesc: "Sélectionnez un article pour qu'il soit mis en avant demain.",
+        issPositionLabel: "Position",
+        issSpeedLabel: "Vitesse",
+        issAltLabel: "Altitude",
+        issCrewLabel: "Équipage",
+        issLoading: "Chargement...",
+        issAstronauts: "astronautes",
+        moonPhases: ["Nouvelle Lune", "Premier Croissant", "Premier Quartier", "Gibbeuse Croissante", "Pleine Lune", "Gibbeuse Décroissante", "Dernier Quartier", "Dernier Croissant"],
+        funFactTitle: "Saviez-vous ?",
+        facts: [
+            "Un jour sur Vénus est plus long qu'une année sur Vénus.",
+            "L'espace est complètement silencieux car il n'est pas rempli d'air.",
+            "Il y a plus d'étoiles dans l'univers que de grains de sable sur Terre.",
+            "Si deux morceaux du même métal se touchent dans l'espace, ils se soudent à froid.",
+            "Le coucher de soleil sur Mars est bleu.",
+            "La Grande Tache Rouge de Jupiter est une tempête de 300 ans.",
+            "Un an sur Mercure ne dure que 88 jours terrestres.",
+            "L'empreinte des astronautes sur la Lune y restera des millions d'années."
+        ]
     },
     en: {
         navCreate: "Create",
         navActualites: "News",
         navLaunches: "Launches",
         navSkyMap: "Sky Map",
+        navISS: "ISS",
         navArticles: "Articles",
         heroBadge: "🔭 Explore the infinity",
         heroTitle1: "Share your cosmic",
@@ -167,7 +187,25 @@ const TRANSLATIONS = {
         tabArxiv: "ArXiv",
         btnSelectTomorrow: "Select for tomorrow",
         toastArxivSelected: "Article selected for tomorrow!",
-        arxivLibraryDesc: "Select an article to be featured tomorrow."
+        arxivLibraryDesc: "Select an article to be featured tomorrow.",
+        issPositionLabel: "Position",
+        issSpeedLabel: "Speed",
+        issAltLabel: "Altitude",
+        issCrewLabel: "Crew",
+        issLoading: "Loading...",
+        issAstronauts: "astronauts",
+        moonPhases: ["New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full Moon", "Waning Gibbous", "Last Quarter", "Waning Crescent"],
+        funFactTitle: "Did you know?",
+        facts: [
+            "A day on Venus is longer than a year on Venus.",
+            "Space is completely silent because there is no atmosphere.",
+            "There are more stars in the universe than grains of sand on Earth.",
+            "If two pieces of the same metal touch in space, they bond permanently.",
+            "Sunsets on Mars are blue.",
+            "Jupiter's Great Red Spot is a 300-year-old storm.",
+            "One year on Mercury is only 88 Earth days.",
+            "Footprints on the Moon will stay there for millions of years."
+        ]
     }
 };
 
@@ -868,7 +906,12 @@ function translateUI() {
         '[href="#actualites"].nav-link': t.navActualites,
         '[href="#launches"].nav-link': t.navLaunches,
         '[href="#skymap"].nav-link': t.navSkyMap,
+        '[href="#iss"].nav-link': t.navISS,
         '[href="#articles"].nav-link': t.navArticles,
+        '[data-translate="issPositionLabel"]': t.issPositionLabel,
+        '[data-translate="issSpeedLabel"]': t.issSpeedLabel,
+        '[data-translate="issAltLabel"]': t.issAltLabel,
+        '[data-translate="issCrewLabel"]': t.issCrewLabel,
         '.hero-badge': t.heroBadge,
         '.hero-subtitle': t.heroSubtitle,
         '.hero-cta span': t.heroCta,
@@ -887,7 +930,9 @@ function translateUI() {
         '#articles-empty h3': t.emptyTitle,
         '#articles-empty p': t.emptyDesc,
         '#articles-empty .btn': t.emptyCta,
-        '.footer-text': t.footerTagline
+        '.footer-text': t.footerTagline,
+        '.fact-emoji': '💡',
+        '#fun-fact-container .fact-emoji + span': t.funFactTitle
     };
 
     for (const [selector, text] of Object.entries(mappings)) {
@@ -913,6 +958,10 @@ function translateUI() {
     // Document title
     document.title = `Cosmos — ${currentLang === 'fr' ? "Articles d'Astronomie" : "Astronomy Articles"}`;
     document.documentElement.lang = currentLang;
+
+    // Refresh aesthetic features on translate
+    initMoonPhase();
+    initFunFacts();
 }
 
 // ---------- Local Storage Fallback ----------
@@ -2807,6 +2856,145 @@ function initSkyMap() {
     }
 }
 
+// ---------- ISS Tracker ----------
+function initISSTracker() {
+    const posEl = document.getElementById('iss-position');
+    const crewEl = document.getElementById('iss-crew');
+    if (!posEl) return;
+
+    async function updateISSPosition() {
+        try {
+            const res = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+            const data = await res.json();
+            const lat = parseFloat(data.latitude).toFixed(2);
+            const lon = parseFloat(data.longitude).toFixed(2);
+            const latDir = lat >= 0 ? 'N' : 'S';
+            const lonDir = lon >= 0 ? 'E' : 'W';
+            posEl.textContent = `${Math.abs(lat)}°${latDir}, ${Math.abs(lon)}°${lonDir}`;
+            
+            const speedEl = document.getElementById('iss-speed');
+            const altEl = document.getElementById('iss-altitude');
+            if (speedEl) speedEl.textContent = `${Math.round(data.velocity).toLocaleString()} km/h`;
+            if (altEl) altEl.textContent = `${parseFloat(data.altitude).toFixed(1)} km`;
+        } catch (err) {
+            console.error('ISS position error:', err);
+        }
+    }
+
+    async function updateISSCrew() {
+        try {
+            const res = await fetch('http://api.open-notify.org/astros.json');
+            const data = await res.json();
+            const issCrew = data.people.filter(p => p.craft === 'ISS');
+            if (crewEl) crewEl.textContent = `${issCrew.length} ${TRANSLATIONS[currentLang].issAstronauts}`;
+        } catch (err) {
+            console.error('ISS crew error:', err);
+            if (crewEl) crewEl.textContent = `7 ${TRANSLATIONS[currentLang].issAstronauts}`;
+        }
+    }
+
+    updateISSPosition();
+    updateISSCrew();
+    setInterval(updateISSPosition, 5000); // Update position every 5s
+
+    // Globe controls
+    const wrapper = document.querySelector('.iss-globe-wrapper');
+    const zoomInBtn = document.getElementById('iss-zoom-in');
+    const zoomOutBtn = document.getElementById('iss-zoom-out');
+    let currentZoom = 1;
+
+    if (zoomInBtn && wrapper) {
+        zoomInBtn.addEventListener('click', () => {
+            currentZoom = Math.min(currentZoom + 0.2, 2.5);
+            wrapper.style.transform = `scale(${currentZoom})`;
+        });
+    }
+    if (zoomOutBtn && wrapper) {
+        zoomOutBtn.addEventListener('click', () => {
+            currentZoom = Math.max(currentZoom - 0.2, 0.6);
+            wrapper.style.transform = `scale(${currentZoom})`;
+        });
+    }
+}
+
+// ---------- Moon Phase & Fun Facts ----------
+function initMoonPhase() {
+    const moonIcon = document.getElementById('moon-icon');
+    const moonNav = document.getElementById('moon-phase-nav');
+    if (!moonIcon) return;
+
+    // 12-hour cache logic
+    const CACHE_KEY = 'cosmos_moon_cache';
+    const now = Date.now();
+    let cached = localStorage.getItem(CACHE_KEY);
+    if (cached) cached = JSON.parse(cached);
+
+    let index;
+    if (cached && (now - cached.time < 12 * 60 * 60 * 1000)) {
+        index = cached.index;
+    } else {
+        const lp = 2551443; // synodic month in seconds
+        const ref_new_moon = new Date(1970, 0, 7, 20, 35, 0);
+        const phase = ((now - ref_new_moon.getTime()) / 1000) % lp;
+        index = Math.floor((phase / lp) * 8);
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ index, time: now }));
+    }
+
+    const MOON_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+    const phaseName = TRANSLATIONS[currentLang].moonPhases[index];
+    
+    moonIcon.textContent = MOON_ICONS[index];
+    if (moonNav) {
+        moonNav.title = phaseName;
+        // Click for big view
+        moonNav.onclick = () => showMoonDetails(MOON_ICONS[index], phaseName);
+    }
+}
+
+function showMoonDetails(icon, name) {
+    const overlay = document.createElement('div');
+    overlay.className = 'moon-modal-overlay';
+    overlay.innerHTML = `
+        <div class="moon-modal-content">
+            <span class="moon-big-icon">${icon}</span>
+            <div class="moon-big-name">${name}</div>
+            <div class="moon-big-desc">${currentLang === 'fr' ? 'Phase Lunaire Actuelle' : 'Current Lunar Phase'}</div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('active'), 10);
+    
+    overlay.onclick = () => {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 500);
+    };
+}
+
+function initFunFacts() {
+    const container = document.getElementById('fun-fact-container');
+    const textEl = document.getElementById('fun-fact-text');
+    if (!container || !textEl) return;
+
+    const CACHE_KEY = 'cosmos_fact_cache';
+    const now = Date.now();
+    let cached = localStorage.getItem(CACHE_KEY);
+    if (cached) cached = JSON.parse(cached);
+
+    const facts = TRANSLATIONS[currentLang].facts;
+    let factText;
+
+    if (cached && (now - cached.time < 12 * 60 * 60 * 1000) && facts[cached.index]) {
+        factText = facts[cached.index];
+    } else {
+        const index = Math.floor(Math.random() * facts.length);
+        factText = facts[index];
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ index, time: now }));
+    }
+
+    textEl.textContent = factText;
+    container.classList.remove('hidden');
+}
+
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", async () => {
     initQuill();
@@ -2820,6 +3008,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Feature initializations
     fetchLaunches();
     initSkyMap();
+    initISSTracker();
+    initMoonPhase();
+    initFunFacts();
 
     const publishBtn = document.getElementById("publish-button");
     const clearBtn = document.getElementById("clear-button");

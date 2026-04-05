@@ -38,7 +38,11 @@
                 <a href="#actualites" class="nav-link" data-translate="navActualites">Actualités</a>
                 <a href="#launches" class="nav-link" data-translate="navLaunches">Lancements</a>
                 <a href="#skymap" class="nav-link" data-translate="navSkyMap">Carte du Ciel</a>
+                <a href="#iss" class="nav-link" data-translate="navISS">ISS</a>
                 <a href="#articles" class="nav-link" data-translate="navArticles">Articles</a>
+                <div id="moon-phase-nav" class="moon-phase-nav" title="Phase de la Lune">
+                    <span id="moon-icon" class="moon-icon">🌑</span>
+                </div>
                 <button id="settings-btn" class="nav-link btn-settings" style="background:none; border:none; cursor:pointer;" aria-label="Paramètres">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 </button>
@@ -57,6 +61,10 @@
             <p class="hero-subtitle">
                 Créez et publiez des articles sur l'astronomie, les étoiles, les galaxies et les mystères de l'univers.
             </p>
+            <div id="fun-fact-container" class="fun-fact-container glass-card hidden">
+                <span class="fact-emoji">💡</span>
+                <span id="fun-fact-text" class="fact-text">Chargement d'une anecdote...</span>
+            </div>
             <a href="#create" class="hero-cta">
                 <span>Commencer à écrire</span>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -210,6 +218,49 @@
             <div class="skymap-container glass-card">
                 <div id="starmap" style="width:100%; height:500px; border-radius:12px; overflow:hidden;">
                     <!-- VirtualSky iframe will be injected here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ISS Tracker Section -->
+        <section class="section" id="iss">
+            <div class="section-header">
+                <span class="section-tag">🛰️ Temps Réel</span>
+                <h2 class="section-title">Traqueur ISS</h2>
+                <p class="section-desc">Suivez la Station Spatiale Internationale en direct autour de la Terre.</p>
+            </div>
+
+            <div class="iss-layout">
+                <div class="iss-globe-container glass-card">
+                    <div class="iss-globe-wrapper">
+                        <iframe id="iss-iframe" loading="lazy" src="https://www.satflare.com/w3d/?q=25544" width="100%" height="500" frameborder="0" scrolling="no" style="border-radius:12px;"></iframe>
+                    </div>
+                    <div class="iss-controls">
+                        <button id="iss-zoom-in" class="iss-ctrl-btn" title="Zoom +">+</button>
+                        <button id="iss-zoom-out" class="iss-ctrl-btn" title="Zoom -">−</button>
+                    </div>
+                </div>
+                <div class="iss-info-panel">
+                    <div class="iss-stat glass-card">
+                        <div class="iss-stat-icon">📍</div>
+                        <div class="iss-stat-label" data-translate="issPositionLabel">Position</div>
+                        <div class="iss-stat-value" id="iss-position">Chargement...</div>
+                    </div>
+                    <div class="iss-stat glass-card">
+                        <div class="iss-stat-icon">⚡</div>
+                        <div class="iss-stat-label" data-translate="issSpeedLabel">Vitesse</div>
+                        <div class="iss-stat-value" id="iss-speed">~27 600 km/h</div>
+                    </div>
+                    <div class="iss-stat glass-card">
+                        <div class="iss-stat-icon">📶</div>
+                        <div class="iss-stat-label" data-translate="issAltLabel">Altitude</div>
+                        <div class="iss-stat-value" id="iss-altitude">~408 km</div>
+                    </div>
+                    <div class="iss-stat glass-card">
+                        <div class="iss-stat-icon">👨‍🚀</div>
+                        <div class="iss-stat-label" data-translate="issCrewLabel">Équipage</div>
+                        <div class="iss-stat-value" id="iss-crew">Chargement...</div>
+                    </div>
                 </div>
             </div>
         </section>
