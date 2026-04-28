@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="L'Horloge Cosmique — Visualisez les 13,8 milliards d'années de l'Univers compressées en 24 heures.">
+    <meta name="theme-color" content="#08060f">
+    <title>Horloge Cosmique — Cosmos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/horloge.css">
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="cosmos-bg"></div>
+    <div class="stars-container"></div>
+
+    <!-- Navigation -->
+    <nav class="horloge-nav">
+        <div class="nav-inner">
+            <a href="./index.html" class="nav-brand">
+                <span class="brand-icon">✦</span>
+                <span class="brand-text">Cosmos</span>
+            </a>
+            <div class="nav-links">
+                <a href="./index.html" class="nav-link back-link">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                    Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="horloge-main">
+        <header class="horloge-header">
+            <div class="header-badge">⏳ Chronologie Universelle</div>
+            <h1>L'Horloge <span>Cosmique</span></h1>
+            <p>Si l'histoire de l'Univers depuis le Big Bang tenait en une seule journée...</p>
+        </header>
+
+        <section class="clock-section">
+            <div class="clock-container">
+                <!-- Interactive SVG Clock -->
+                <svg id="cosmic-clock" viewBox="0 0 500 500" class="clock-svg">
+                    <!-- Outer ring -->
+                    <circle cx="250" cy="250" r="230" class="clock-ring-outer"/>
+                    <!-- Glass effect -->
+                    <circle cx="250" cy="250" r="220" class="clock-face"/>
+                    
+                    <!-- Progress Arc -->
+                    <path id="progress-arc" d="" class="clock-progress-arc"/>
+
+                    <!-- Hour markers -->
+                    <g id="hour-markers"></g>
+                    
+                    <!-- Time labels (00, 06, 12, 18) -->
+                    <text x="250" y="70" class="time-label">00</text>
+                    <text x="430" y="250" class="time-label" style="dominant-baseline: middle; text-anchor: start;">06</text>
+                    <text x="250" y="440" class="time-label">12</text>
+                    <text x="70" y="250" class="time-label" style="dominant-baseline: middle; text-anchor: end;">18</text>
+
+                    <!-- Event Markers Group -->
+                    <g id="event-markers"></g>
+
+                    <!-- Clock Hands -->
+                    <line id="hour-hand" x1="250" y1="250" x2="250" y2="100" class="hand hour-hand"/>
+                    <line id="second-hand" x1="250" y1="250" x2="250" y2="80" class="hand second-hand"/>
+                    
+                    <!-- Center point -->
+                    <circle cx="250" cy="250" r="8" class="clock-center"/>
+                </svg>
+
+                <div class="time-display">
+                    <span id="current-cosmic-time">00:00:00</span>
+                </div>
+            </div>
+
+            <!-- Detail Panel -->
+            <div class="detail-panel" id="detail-panel">
+                <div class="panel-placeholder" id="panel-placeholder">
+                    <div class="pulse-icon">👆</div>
+                    <p>Cliquez sur un marqueur ou faites défiler le temps pour explorer les événements clés.</p>
+                </div>
+                <div class="panel-content hidden" id="panel-content">
+                    <div class="event-time-tag" id="event-time">00:00</div>
+                    <h2 class="event-title" id="event-title">Le Big Bang</h2>
+                    <div class="event-era" id="event-era">Il y a 13,8 milliards d'années</div>
+                    <p class="event-desc" id="event-desc">L'Univers commence son expansion brutale à partir d'un point d'une densité et d'une température infinies.</p>
+                    <div class="event-fact">
+                        <strong>Le saviez-vous ?</strong>
+                        <span id="event-fact">À cette échelle, toute l'histoire humaine enregistrée ne dure que 0,1 seconde.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Timeline / Slider Section -->
+        <section class="slider-section">
+            <div class="controls-row">
+                <button id="play-btn" class="control-btn" title="Lancer le voyage">▶️ Lancer le Voyage</button>
+                <div class="slider-container">
+                    <input type="range" id="time-slider" min="0" max="86400" value="0" class="time-slider">
+                </div>
+            </div>
+            <div class="slider-labels">
+                <span>00:00 (Big Bang)</span>
+                <span>Défilement Temporel</span>
+                <span>24:00 (Maintenant)</span>
+            </div>
+        </section>
+
+        <!-- Legend -->
+        <section class="legend-section">
+            <div class="legend-item">
+                <span class="legend-dot orange"></span>
+                <span>Cosmologie</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot blue"></span>
+                <span>Terre & Soleil</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot green"></span>
+                <span>Vie & Biologie</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot white"></span>
+                <span>Humanité</span>
+            </div>
+        </section>
+    </main>
+
+    <script src="./js/horloge.js" type="module"></script>
+</body>
+</html>

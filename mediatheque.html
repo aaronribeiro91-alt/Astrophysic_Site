@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Médiathèque Cosmos — Suivez vos films, séries, anime et manga. Notez et organisez vos médias préférés.">
+    <meta name="theme-color" content="#08060f">
+    <title>Médiathèque — Cosmos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./css/mediatheque.css">
+</head>
+<body>
+    <!-- Cinema Background -->
+    <div class="cinema-bg" aria-hidden="true"></div>
+    <div class="cinema-particles" aria-hidden="true"></div>
+
+    <!-- Passcode Gate -->
+    <div class="passcode-overlay" id="passcode-overlay">
+        <div class="passcode-box">
+            <div class="passcode-icon">🔐</div>
+            <h2>Accès Médiathèque</h2>
+            <p>Entre le code pour accéder à la bibliothèque</p>
+            <div class="passcode-dots" id="passcode-dots">
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <input type="password" id="passcode-input" class="passcode-hidden-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autofocus>
+            <div class="passcode-error" id="passcode-error">Code incorrect</div>
+            <div class="passcode-keypad" id="passcode-keypad">
+                <button data-key="1">1</button>
+                <button data-key="2">2</button>
+                <button data-key="3">3</button>
+                <button data-key="4">4</button>
+                <button data-key="5">5</button>
+                <button data-key="6">6</button>
+                <button data-key="7">7</button>
+                <button data-key="8">8</button>
+                <button data-key="9">9</button>
+                <button data-key="del" class="key-special">⌫</button>
+                <button data-key="0">0</button>
+                <button data-key="enter" class="key-special key-enter">→</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="media-navbar">
+        <div class="media-nav-inner">
+            <a href="./mediatheque.html" class="media-nav-brand">
+                <span class="media-brand-icon">🎬</span>
+                <span class="media-brand-text">Médiathèque</span>
+            </a>
+            <div class="media-nav-links">
+                <!-- Profile indicator -->
+                <div class="media-nav-profile" id="nav-profile-name">👤 Aaron</div>
+                <a href="./index.html" class="media-nav-link back-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                    Cosmos
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Page -->
+    <div class="media-page">
+        <!-- Header -->
+        <div class="media-header">
+            <h1>Ma <span>Médiathèque</span></h1>
+            <p>Films, séries, anime et manga — tout au même endroit.</p>
+        </div>
+
+        <!-- Main Tabs: Movies / Anime -->
+        <div class="media-tabs">
+            <button class="media-tab-btn active" data-tab="movies">
+                <span class="tab-emoji">🎬</span>
+                Films & Séries
+            </button>
+            <button class="media-tab-btn" data-tab="anime">
+                <span class="tab-emoji">📺</span>
+                Manga & Anime
+            </button>
+        </div>
+
+        <!-- Sub Tabs: Discover / My List -->
+        <div class="media-sub-tabs">
+            <button class="media-sub-tab active" data-subtab="discover">🔍 Découvrir</button>
+            <button class="media-sub-tab" data-subtab="mylist">📋 Ma Liste</button>
+        </div>
+
+        <!-- Profile Selector -->
+        <div class="media-profile-selector" id="profile-selector">
+            <span class="profile-label">👤 Liste de :</span>
+            <div class="profile-buttons">
+                <button class="profile-btn active" data-profile="Aaron">Aaron</button>
+                <button class="profile-btn" data-profile="Matthéo">Matthéo</button>
+                <button class="profile-btn" data-profile="Maman">Maman</button>
+                <button class="profile-btn" data-profile="Papa">Papa</button>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="media-search-section" id="search-section">
+            <div class="media-search-wrapper">
+                <input type="text" id="media-search" class="media-search-input" placeholder="Rechercher un film ou une série..." autocomplete="off">
+                <svg class="media-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Filter bar (My List only) -->
+        <div class="media-filter-bar hidden" id="filter-bar">
+            <button class="media-filter-btn active" data-filter="all">
+                Tous <span class="media-filter-count">0</span>
+            </button>
+            <button class="media-filter-btn" data-filter="to_watch">
+                📋 À voir <span class="media-filter-count">0</span>
+            </button>
+            <button class="media-filter-btn" data-filter="watching">
+                ▶️ En cours <span class="media-filter-count">0</span>
+            </button>
+            <button class="media-filter-btn" data-filter="watched">
+                ✅ Vu <span class="media-filter-count">0</span>
+            </button>
+            <button class="media-filter-btn" data-filter="liked">
+                ❤️ Aimé <span class="media-filter-count">0</span>
+            </button>
+            <button class="media-filter-btn" data-filter="disliked">
+                👎 Pas aimé <span class="media-filter-count">0</span>
+            </button>
+        </div>
+
+        <!-- Trending Section -->
+        <div class="media-trending-section" id="trending-section">
+            <div class="media-trending-header">
+                <h3 class="media-trending-title" id="trending-title">🔥 Films Tendances</h3>
+            </div>
+            <div class="media-trending-scroll" id="trending-scroll">
+                <!-- Cards loaded dynamically -->
+            </div>
+        </div>
+
+        <!-- Grid Title -->
+        <div class="media-trending-header" id="grid-title-wrapper">
+            <h3 class="media-trending-title" id="grid-title">📺 Séries Tendances</h3>
+        </div>
+
+        <!-- Content Grid -->
+        <div class="media-grid" id="media-grid">
+            <!-- Cards loaded dynamically -->
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="media-toast-container" id="media-toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="media-footer">
+        <p>Données fournies par <a href="https://www.themoviedb.org/" target="_blank">TMDB</a> & <a href="https://myanimelist.net/" target="_blank">MyAnimeList</a></p>
+        <p style="margin-top: 6px;">
+            <a href="./index.html">← Retour à Cosmos</a>
+        </p>
+    </footer>
+
+    <script type="module" src="./js/mediatheque.js"></script>
+</body>
+</html>
